@@ -11,11 +11,11 @@ info:
 
     - 第一期范围：商品、客户、库存、订单、支付、履约、售后、发票、组织权限、审计。**不包含**智能客服、RAG、本体与工具调用。
 
-    - 第二至四期（知识库、RAG 客服、本体与工具调用）在本期预留扩展点：shared.outbox_event 领域事件表、knowledge 保留 schema（pgvector 0.8.7 已启用）、pg_trgm 全文检索、pgcrypto 加密能力；业务表与事件均为后续阶段可消费的数据底座。
+    - 本期预留扩展点：shared.outbox_event 领域事件表、knowledge 保留 schema（pgvector 0.8.7 已启用）、pg_trgm 全文检索、pgcrypto 加密能力；业务表与事件均为后续阶段可消费的数据底座。
 
-    - 技术栈：Python 3.11 + FastAPI + Pydantic v2 + SQLAlchemy 2.0 + Alembic + psycopg3 + PostgreSQL 17 + Redis 7 + MinIO 兼容 S3；后续三期 Agent 客服使用 LangGraph（Python），因此保持 Python 单体多模块。
+    - 技术栈：Python 3.11 + FastAPI + Pydantic v2 + SQLAlchemy 2.0 + Alembic + psycopg3 + PostgreSQL 17 + Redis 7 + MinIO 兼容 S3；保持 Python 单体多模块，便于后续扩展。
 
-    - 数据库模式：单库多 schema —— shared（身份/权限/渠道/审计/附件/幂等/outbox）、commerce（一期业务表）、knowledge（二三期预留）。
+    - 数据库模式：单库多 schema —— shared（身份/权限/渠道/审计/附件/幂等/outbox）、commerce（一期业务表）、knowledge（预留，本期不写入）。
 
     - 金额：numeric(14,2)，币种固定 CNY；JSON 中以字符串传输，禁止浮点。
 
@@ -9890,7 +9890,7 @@ x-platform:
   idempotency_store: shared.idempotency_record
   outbox:
     table: shared.outbox_event
-    phase_1_behavior: 本期只写不消费，为二期知识同步与三四期 Agent/工具事件总线预留
+    phase_1_behavior: 本期只写不消费，作为下游事件消费的预留出口
     event_types:
     - order.created
     - order.paid
@@ -9919,4 +9919,4 @@ x-platform:
     phase_2_knowledge_base: knowledge schema 已保留，本期不提供接口
     phase_3_rag_customer_service: 动态事实查询可复用本期只读接口，写操作沿用幂等与审计
     phase_4_ontology_and_tools: 工具调用通过 outbox_event 与审计日志闭环，本期不实现
-    pgvector: 0.8.7 已启用，供二期知识切片向量检索使用
+    pgvector: 0.8.7 已启用，供知识切片向量检索使用

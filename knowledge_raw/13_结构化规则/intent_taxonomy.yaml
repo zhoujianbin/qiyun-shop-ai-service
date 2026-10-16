@@ -1,0 +1,16 @@
+schema_version: "1.0"
+intents:
+  PRODUCT_INFO: {required_entities: [product_id], tools: [], escalation: false}
+  TROUBLESHOOTING: {required_entities: [product_id, symptom], tools: [device_status_optional], escalation: conditional}
+  ORDER_QUERY: {required_entities: [order_id], tools: [order_query], escalation: false}
+  PAYMENT_ISSUE: {required_entities: [order_id], tools: [payment_query], escalation: conditional}
+  LOGISTICS_QUERY: {required_entities: [order_id], tools: [shipment_query], escalation: conditional}
+  INSTALLATION: {required_entities: [product_id, service_region], tools: [installation_query], escalation: conditional}
+  ACCOUNT_SECURITY: {required_entities: [account_session], tools: [security_audit], escalation: true}
+  DEVICE_OWNERSHIP: {required_entities: [product_id, device_id_suffix], tools: [device_binding_query], escalation: conditional}
+  CLOUD_SUBSCRIPTION: {required_entities: [device_id_suffix], tools: [subscription_query], escalation: conditional}
+  RETURN_REFUND: {required_entities: [order_id], tools: [order_query, after_sales_query], escalation: conditional}
+  REPAIR: {required_entities: [product_id], tools: [repair_query], escalation: conditional}
+  COMPLAINT: {required_entities: [issue_summary], tools: [ticket_query_optional], escalation: true}
+  PRIVACY_SAFETY: {required_entities: [issue_summary], tools: [security_audit_optional], escalation: true}
+  HUMAN_REQUEST: {required_entities: [], tools: [], escalation: true}

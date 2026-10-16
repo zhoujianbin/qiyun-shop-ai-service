@@ -1,0 +1,49 @@
+schema_version: "1.1"
+order_states: [PENDING_PAYMENT, PAID, PREPARING, PARTIALLY_SHIPPED, SHIPPED, COMPLETED, CANCELLED]
+payment_states: [UNPAID, PROCESSING, PAID, FAILED, PARTIALLY_REFUNDED, REFUNDED]
+fulfillment_states: [UNFULFILLED, PARTIAL, FULFILLED, DELIVERED, EXCEPTION]
+refund_states: [NONE, REQUESTED, REVIEWING, RETURNING, ACCEPTED, REFUNDING, REFUNDED, REJECTED, CANCELLED]
+order_transitions:
+  - {from: PENDING_PAYMENT, to: PAID, event: payment_confirmed}
+  - {from: PENDING_PAYMENT, to: CANCELLED, event: cancel_or_payment_timeout}
+  - {from: PAID, to: PREPARING, event: warehouse_accepted}
+  - {from: PAID, to: CANCELLED, event: cancellation_intercepted}
+  - {from: PREPARING, to: PARTIALLY_SHIPPED, event: first_partial_dispatch}
+  - {from: PREPARING, to: SHIPPED, event: full_dispatch}
+  - {from: PREPARING, to: CANCELLED, event: cancellation_intercepted}
+  - {from: PARTIALLY_SHIPPED, to: SHIPPED, event: remaining_dispatch}
+  - {from: SHIPPED, to: COMPLETED, event: all_packages_delivered_and_completion_confirmed}
+payment_transitions:
+  - {from: UNPAID, to: PROCESSING, event: payment_submitted}
+  - {from: PROCESSING, to: PAID, event: channel_confirmed}
+  - {from: PROCESSING, to: FAILED, event: channel_failed_or_timeout}
+  - {from: FAILED, to: PROCESSING, event: customer_retries}
+  - {from: PAID, to: PARTIALLY_REFUNDED, event: partial_refund_confirmed}
+  - {from: PAID, to: REFUNDED, event: full_refund_confirmed}
+  - {from: PARTIALLY_REFUNDED, to: REFUNDED, event: remaining_refund_confirmed}
+fulfillment_transitions:
+  - {from: UNFULFILLED, to: PARTIAL, event: partial_dispatch}
+  - {from: UNFULFILLED, to: FULFILLED, event: full_dispatch}
+  - {from: PARTIAL, to: FULFILLED, event: remaining_dispatch}
+  - {from: UNFULFILLED, to: EXCEPTION, event: warehouse_exception}
+  - {from: PARTIAL, to: EXCEPTION, event: shipment_exception}
+  - {from: FULFILLED, to: DELIVERED, event: all_packages_delivered}
+  - {from: FULFILLED, to: EXCEPTION, event: delivery_exception}
+  - {from: EXCEPTION, to: UNFULFILLED, event: warehouse_exception_resolved}
+  - {from: EXCEPTION, to: FULFILLED, event: delivery_exception_resolved}
+refund_transitions:
+  - {from: NONE, to: REQUESTED, event: customer_submitted}
+  - {from: REQUESTED, to: REVIEWING, event: review_started}
+  - {from: REQUESTED, to: CANCELLED, event: customer_withdrew}
+  - {from: REVIEWING, to: RETURNING, event: return_required}
+  - {from: REVIEWING, to: ACCEPTED, event: approved_without_return}
+  - {from: REVIEWING, to: REJECTED, event: rejected_with_reason}
+  - {from: REVIEWING, to: CANCELLED, event: customer_withdrew}
+  - {from: RETURNING, to: ACCEPTED, event: returned_goods_accepted}
+  - {from: RETURNING, to: REJECTED, event: returned_goods_rejected_with_evidence}
+  - {from: ACCEPTED, to: REFUNDING, event: refund_instruction_sent}
+  - {from: REFUNDING, to: REFUNDED, event: payment_channel_confirmed}
+terminal_states:
+  order: [COMPLETED, CANCELLED]
+  payment: [REFUNDED]
+  refund: [REFUNDED, REJECTED, CANCELLED]

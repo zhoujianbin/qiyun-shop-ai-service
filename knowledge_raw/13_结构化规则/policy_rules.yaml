@@ -1,0 +1,27 @@
+schema_version: "1.0"
+rules:
+  RETURN-NO-REASON-7D:
+    days_from_delivery: 7
+    conditions: [eligible_channel, product_complete, no_unreasonable_value_loss]
+  QUALITY-ISSUE-RETURN-15D:
+    days_from_delivery: 15
+    requires: service_assessment
+  QUALITY-ISSUE-EXCHANGE-30D:
+    days_from_delivery: 30
+    requires: service_assessment
+  REFUND-MERCHANT-PROCESS-3BD:
+    business_days_after_acceptance: 3
+    payment_arrival_days: {wallet: "1-3", bank_card: "3-7"}
+  SHIPPING-FREE-99:
+    threshold_cny: 99
+    standard_fee_cny: 8
+  LOGISTICS-STAGNANT-72H:
+    hours_without_update: 72
+  ADDRESS-CHANGE-AFTER-SHIP:
+    action: request_intercept_or_reroute
+    guaranteed: false
+  INSTALL-RESCHEDULE-4H:
+    minimum_notice_hours: 4
+  CLOUD-COOLING-OFF-7D:
+    days: 7
+    conditions: [not_activated_or_no_cloud_recording_generated]

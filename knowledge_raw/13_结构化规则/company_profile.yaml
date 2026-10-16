@@ -1,0 +1,14 @@
+schema_version: "1.0"
+company:
+  legal_name: 栖云智家科技有限公司
+  brand_name: 栖云智家
+  english_name: Qiyun Smart Home
+  service_region: 中国大陆
+channels:
+  - official_store
+  - official_marketplace_store
+  - authorized_retailer
+service_hours:
+  ai_support: {schedule: "7x24"}
+  human_support: {daily: "09:00-21:00", timezone: Asia/Shanghai}
+roles: [customer, frontline_support, technical_support, installer, after_sales_specialist, supervisor, knowledge_admin]

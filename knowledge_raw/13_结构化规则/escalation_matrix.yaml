@@ -1,0 +1,50 @@
+schema_version: "1.0"
+rules:
+  ESC-P0-TRAPPED:
+    priority: P0
+    triggers: [person_trapped, fire, medical_emergency]
+    target: supervisor_and_emergency_guidance
+    response_minutes: 5
+    prohibit: [normal_troubleshooting, remote_unlock_promise]
+  ESC-P0-ELECTRICAL:
+    priority: P0
+    triggers: [smoke, sparks, electric_shock, battery_fire, water_near_energized_equipment]
+    target: supervisor_and_safety_team
+    response_minutes: 5
+    prohibit: [touch_wet_plug, move_wet_equipment, power_on_retry]
+  ESC-P1-DEVICE-THERMAL:
+    priority: P1
+    triggers: [abnormal_heat_without_smoke, burnt_smell_without_visible_fire, battery_swelling]
+    target: safety_and_quality_team
+    response_minutes: 15
+    prohibit: [continue_charging, puncture_battery, power_on_retry]
+  ESC-P1-ACCOUNT:
+    priority: P1
+    triggers: [account_takeover, unknown_admin, credential_change]
+    target: security_team
+    response_minutes: 15
+    prohibit: [request_verification_code]
+  ESC-P1-CAMERA:
+    priority: P1
+    triggers: [unknown_camera_access, unexpected_sharing]
+    target: security_and_privacy_team
+    response_minutes: 15
+    prohibit: [view_customer_video]
+  ESC-P1-BATCH:
+    priority: P1
+    triggers: [batch_device_failure, cloud_region_outage]
+    target: incident_manager
+    response_minutes: 15
+    prohibit: [individual_compensation_promise]
+  ESC-P2-CORE:
+    priority: P2
+    triggers: [core_function_unavailable_with_workaround]
+    target: technical_support
+    response_minutes: 120
+    prohibit: []
+  ESC-P3-GENERAL:
+    priority: P3
+    triggers: [general_question, cosmetic_issue, suggestion]
+    target: frontline_support
+    response_minutes: 240
+    prohibit: []

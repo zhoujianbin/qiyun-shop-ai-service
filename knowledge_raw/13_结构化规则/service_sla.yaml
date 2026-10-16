@@ -1,0 +1,10 @@
+schema_version: "1.0"
+priorities:
+  P0: {first_response_minutes: 5, update_minutes: 30, target: immediate_safety_handoff}
+  P1: {first_response_minutes: 15, update_hours: 2, target_hours: 8}
+  P2: {first_response_hours: 2, update_hours: 24, target_business_days: 3}
+  P3: {first_response_hours: 4, update_hours: 48, target_business_days: 5}
+clock:
+  timezone: Asia/Shanghai
+  human_service_hours: "09:00-21:00 daily"
+  pause_allowed_states: [PENDING_CUSTOMER, PENDING_PARTNER]

@@ -1,0 +1,12 @@
+schema_version: "1.0"
+products:
+  - {product_id: QL-L3P, name: 栖云智能门锁 L3 Pro, type: smart_lock, master: 01_产品知识/QL-L3P_智能门锁/产品主档.md}
+  - {product_id: QC-C2G, name: 栖云摄像头 C2 守望版, type: camera, master: 01_产品知识/QC-C2G_家用摄像头/产品主档.md}
+  - {product_id: QR-R5M, name: 栖云扫地机器人 R5 Max, type: robot_vacuum, master: 01_产品知识/QR-R5M_扫地机器人/产品主档.md}
+  - {product_id: QT-L1C, name: 栖云智能吸顶灯 LightOne, type: smart_light, master: 01_产品知识/QT-L1C_智能吸顶灯/产品主档.md}
+  - {product_id: QH-G1, name: 栖云家庭网关 Hub G1, type: gateway, master: 01_产品知识/QH-G1_家庭网关/产品主档.md}
+accessories:
+  - {accessory_id: QA-L3-BAT8, product_id: QL-L3P, name: 8节AA碱性电池组, consumable: true}
+  - {accessory_id: QA-C2-MOUNT, product_id: QC-C2G, name: 壁装支架, consumable: false}
+  - {accessory_id: QA-R5-BRUSH, product_id: QR-R5M, name: 主刷组件, consumable: true}
+  - {accessory_id: QA-R5-MOP, product_id: QR-R5M, name: 拖布组件, consumable: true}

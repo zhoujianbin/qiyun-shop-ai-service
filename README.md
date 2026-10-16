@@ -2,7 +2,7 @@
 
 后端 Python（FastAPI + SQLAlchemy 2.0 + psycopg3）+ PostgreSQL 17（pgvector 已启用）+ 前端 React 18（`web/`，Ant Design 5）。
 业务范围：商品目录、库存、客户、购物车、订单、支付、履约物流、售后、退款、发票、组织权限、渠道范围、审计、报表。
-商品数据取自企业知识库产品主档（`knowledge_raw/01_产品知识`）。不含知识库/RAG/本体/工具调用（第二至四期）。
+商品数据取自企业知识库产品主档（`knowledge_raw/01_产品知识`）。不含知识库/RAG/本体/工具调用，仅保留必要的扩展点。
 
 ## 快速开始
 
@@ -83,7 +83,7 @@ python scripts/export_openapi.py                          # 导出 openapi.json 
 - **发票**：申请、企业抬头税号校验、开具、作废。
 - **附件**：上传（扩展名 + MIME + 魔数校验、大小上限、SHA-256 校验和）+ 下载（本人或员工）。
 - **报表**：经营看板、销售日汇总、库存报表、售后报表。
-- **平台**：统一错误体、`request_id`、`Idempotency-Key` 幂等中间件、分页、结构化日志、outbox 事件（供第三期消费）、SPA 静态托管。
+- **平台**：统一错误体、`request_id`、`Idempotency-Key` 幂等中间件、分页、结构化日志、outbox 事件（供下游消费）、SPA 静态托管。
 
 ## 接口契约
 
@@ -135,10 +135,41 @@ qiyun-shop/
 │                     check_frontend_contract
 ├── tests/            53 项：鉴权、目录、库存、订单全链路、支付幂等、权限越权、售后退款、附件、
 │                     报表、模型一致性、真实 HTTP 端到端、前端契约一致性、前端请求与列表形状回归
-└── web/              前端工程（39 页面 / 43 路由 / 24 组件）
-    └── public/           商品 WebP 图片（products/）与首页 Banner（banners/），见「商品图片」
+├── web/              前端工程（39 页面 / 43 路由 / 24 组件）
+│   └── public/       商品 WebP 图片（products/）与首页 Banner（banners/），见「商品图片」
+├── docs/             一期设计文档（详细设计、前端详细设计、DDL、种子数据、契约与校验脚本）
+├── knowledge_raw/    企业知识库原始文档（169 个 Markdown，按业务域分 16 个目录）
+└── LICENSE           MIT
 ```
 
+## 文档与知识库
+
+### docs/（第一期设计文档）
+
+| 文件 | 内容 |
+|---|---|
+| 栖云智家_第一期详细设计.md / .docx | 技术选型、架构、45 张表与索引、状态机、接口清单、幂等与权限、风险 |
+| 栖云智家_第一期_前端详细设计.md / .docx | 信息架构、43 条路由、页面与组件、状态与错误处理、交互规范 |
+| 栖云智家_第一期_openapi.yaml | 第一期接口契约（OpenAPI 3.1） |
+| schema.sql | PostgreSQL 17 可执行 DDL（shared 13 + commerce 32 + knowledge 3 预留） |
+| seed_all.sql / verify_phase1.sql | 基础数据与校验脚本 |
+| gen_openapi.py / validate_openapi.py | 契约生成与校验脚本 |
+| README.md | 文档包索引与阅读顺序 |
+
+文档只覆盖第一期范围；后续规划不在本仓库内。
+
+### knowledge_raw/（企业知识库原始文档）
+
+栖云智家企业知识库的原始 Markdown，169 个文件、16 个业务域目录：
+
+    00_企业基础  01_产品知识  02_订单支付与发票  03_物流与履约  04_安装与交付
+    05_退换货与退款  06_保修维修与备件  07_账户设备与家庭共享  08_云服务与订阅
+    09_客服SOP  10_工单投诉与升级  11_隐私安全与高风险场景  12_场景案例
+    13_结构化规则  14_主题手册  99_校验与维护
+
+每篇文档带 `document_id`、`version`、`owner` 等元信息；`SOURCE_OF_TRUTH.md` 定义真源优先级与冲突处理，
+`AGENTS.md` / `CLAUDE.md` 定义 AI Agent 的检索与回答规则。商品主档（`01_产品知识/`）是 `scripts/bootstrap.py`
+中商品、SKU 与规格参数的来源。
 ## 商品图片
 
 商品图片放在 `web/public/products/`（Vite 会原样复制到 `dist/products/`，因此 Vite 开发服务器与后端托管两种模式都能直接访问），命名与商品型号一一对应：
@@ -212,3 +243,8 @@ SPA 回退吞掉 API 404、前端商品列表调用员工权限接口、前端�
 4. 刷新令牌按接口契约放在请求体（设计文档中的 HttpOnly Cookie 方案为后续加固项）。
 5. 报表为实时 SQL 聚合，数据量增长后建议引入预聚合表或物化视图。
 6. 定时任务（关单、释放预占）尚未接入调度器进程，函数已实现并通过测试（`services/order.close_expired_orders`）。
+
+## 许可证
+
+MIT License，见 [LICENSE](LICENSE)。
+

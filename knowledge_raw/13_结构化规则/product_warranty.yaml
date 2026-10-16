@@ -1,0 +1,12 @@
+schema_version: "1.0"
+rules:
+  - {rule_id: WARRANTY-QL-L3P-MAIN-24M, product_id: QL-L3P, component: lock_body_and_electronics, months: 24}
+  - {rule_id: WARRANTY-QL-L3P-CYLINDER-24M, product_id: QL-L3P, component: lock_cylinder, months: 24}
+  - {rule_id: WARRANTY-QC-C2G-MAIN-12M, product_id: QC-C2G, component: main_unit, months: 12}
+  - {rule_id: WARRANTY-QR-R5M-MAIN-24M, product_id: QR-R5M, component: robot_and_dock, months: 24}
+  - {rule_id: WARRANTY-QR-R5M-BATTERY-12M, product_id: QR-R5M, component: battery, months: 12}
+  - {rule_id: WARRANTY-QT-L1C-MAIN-24M, product_id: QT-L1C, component: lamp_and_driver, months: 24}
+  - {rule_id: WARRANTY-QH-G1-MAIN-12M, product_id: QH-G1, component: main_unit, months: 12}
+consumables:
+  warranty: manufacturing_defect_only
+  excluded_normal_wear: true

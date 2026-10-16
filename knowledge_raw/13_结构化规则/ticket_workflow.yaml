@@ -1,0 +1,21 @@
+schema_version: "1.1"
+states: [NEW, TRIAGED, IN_PROGRESS, PENDING_CUSTOMER, PENDING_PARTNER, RESOLVED, CLOSED, CANCELLED, REOPENED]
+transitions:
+  - {from: NEW, to: TRIAGED, roles: [frontline_support, supervisor], event: triage_completed}
+  - {from: NEW, to: CANCELLED, roles: [frontline_support, supervisor], event: duplicate_or_invalid}
+  - {from: TRIAGED, to: IN_PROGRESS, roles: [frontline_support, technical_support, after_sales_specialist, supervisor], event: owner_assigned}
+  - {from: TRIAGED, to: CANCELLED, roles: [frontline_support, supervisor], event: duplicate_or_customer_withdrew}
+  - {from: IN_PROGRESS, to: PENDING_CUSTOMER, roles: [frontline_support, technical_support, after_sales_specialist], event: customer_input_required}
+  - {from: IN_PROGRESS, to: PENDING_PARTNER, roles: [frontline_support, technical_support, after_sales_specialist], event: partner_input_required}
+  - {from: IN_PROGRESS, to: RESOLVED, roles: [frontline_support, technical_support, after_sales_specialist, supervisor], event: resolution_completed}
+  - {from: IN_PROGRESS, to: CANCELLED, roles: [frontline_support, supervisor], event: customer_withdrew_or_duplicate}
+  - {from: PENDING_CUSTOMER, to: IN_PROGRESS, roles: [frontline_support, technical_support, after_sales_specialist], event: customer_replied}
+  - {from: PENDING_CUSTOMER, to: CANCELLED, roles: [frontline_support, supervisor], event: customer_withdrew_or_retention_expired}
+  - {from: PENDING_PARTNER, to: IN_PROGRESS, roles: [frontline_support, technical_support, after_sales_specialist], event: partner_replied}
+  - {from: PENDING_PARTNER, to: CANCELLED, roles: [frontline_support, supervisor], event: request_invalidated}
+  - {from: RESOLVED, to: CLOSED, roles: [frontline_support, supervisor], event: confirmation_or_closure_window_elapsed}
+  - {from: RESOLVED, to: REOPENED, roles: [frontline_support, supervisor], event: same_issue_recurred, within_days: 7}
+  - {from: REOPENED, to: IN_PROGRESS, roles: [frontline_support, supervisor], event: owner_reassigned}
+required_on_resolution: [resolution_summary, evidence, customer_next_step]
+required_on_cancellation: [cancellation_reason]
+terminal_states: [CLOSED, CANCELLED]

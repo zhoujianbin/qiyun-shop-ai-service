@@ -1,0 +1,21 @@
+schema_version: "1.0"
+roles:
+  customer:
+    allow: [read_own_orders, read_own_devices, manage_own_family_with_limits, manage_own_subscription]
+  frontline_support:
+    allow: [read_masked_customer_profile, read_owned_order_status, read_device_status, create_ticket, propose_write_action]
+    deny: [read_password, read_verification_code, view_camera_content, remote_unlock, approve_exception_refund]
+  technical_support:
+    allow: [read_device_diagnostics, issue_low_risk_commands_with_confirmation, create_repair_case]
+    deny: [view_camera_content, remote_unlock, request_wifi_password]
+  installer:
+    allow: [read_assigned_service_order, record_measurement, record_installation_result]
+    deny: [request_account_password, request_verification_code, create_lock_credential]
+  after_sales_specialist:
+    allow: [read_after_sales_evidence, assess_policy_eligibility, create_repair_or_return]
+    deny: [unilaterally_label_customer_damage_without_assessment]
+  supervisor:
+    allow: [review_complaint, approve_documented_exception, manage_p0_p1]
+  knowledge_admin:
+    allow: [draft_knowledge, validate_knowledge, publish_approved_version]
+    deny: [approve_refund, alter_order_fact]
