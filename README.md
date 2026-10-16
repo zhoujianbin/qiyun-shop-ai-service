@@ -11,7 +11,7 @@ git clone https://github.com/zhoujianbin/qiyun-shop-ai-service.git
 cd qiyun-shop-ai-service
 cp .env.example .env                      # 填写本机 PostgreSQL 连接串与 JWT 密钥
 
-python scripts/create_db.py --db qiyun_shop_dev --reset   # 建库 + 应用 45 张表
+python scripts/create_db.py --db qiyun_shop_dev --reset --force   # 建库 + 应用 45 张表（会删同名库，需 --force 确认）
 python scripts/seed.py --orders 60                        # 生成测试数据
 python -m uvicorn app.main:app --reload --port 8000       # API + 文档 http://127.0.0.1:8000/docs
 
@@ -25,6 +25,30 @@ python scripts/export_openapi.py                          # 导出 openapi.json 
 前端构建产物存在时，后端会自动挂载 SPA：`/` 与客户端路由返回 index.html，`/assets/*` 返回真实资源，
 `/api/*` 未命中仍返回 404（不会被 SPA 吞掉）。
 
+## 多人共用同一个 PostgreSQL 实例
+
+同一个 PostgreSQL 实例可以多人共用，但各自要用**独立的库名**，否则会互相删数据：
+
+| 用途 | 建议命名 | 说明 |
+|---|---|---|
+| 业务库 | `qiyun_shop_dev_<你的名字>` | 写进自己 `.env` 的 `DATABASE_URL` |
+| 测试库 | 自动派生 | `xxx_dev_yyy` → `xxx_test_yyy`；也可用环境变量 `TEST_DB` 显式指定 |
+
+步骤：
+
+```bash
+cp .env.example .env      # DATABASE_URL 换成自己的库名，主机/端口/账号与共用实例一致
+python scripts/create_db.py --db qiyun_shop_dev_<你的名字>   # 新库不需要 --reset
+python scripts/seed.py --orders 60
+python -m pytest -q       # 测试库按业务库名自动派生，不会动别人的库
+```
+
+注意事项：
+
+1. `create_db.py --reset` 会 DROP 目标库，**必须追加 `--force`** 才执行；不要对别人的库或共用的库使用。
+2. `pytest` 每次会话会重建自己的测试库；两人用不同业务库名即可并发跑测试。
+3. `.env` 不入库，账号密码请线下传递；`.env.example` 里只有占位值。
+4. 同一时间一个端口只能一个进程：同机开发时各自换端口（`uvicorn --port 8001`、`npm run dev -- --port 5174`）。
 ## 如何访问（本地）
 
 启动后端与前端后：

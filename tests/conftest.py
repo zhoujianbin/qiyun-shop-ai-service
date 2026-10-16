@@ -7,7 +7,19 @@ import uuid
 import pytest
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-TEST_DB = "qiyun_shop_test"
+
+
+def _test_db_name(base_url: str) -> str:
+    """测试库名：TEST_DB 环境变量优先，否则由业务库名派生（xxx_dev -> xxx_test）。
+
+    多人共用同一个 PostgreSQL 实例时，各自用不同的业务库名即可自动得到不同的测试库，
+    避免并发执行 pytest 时互相 DROP DATABASE / CREATE DATABASE。
+    """
+    explicit = os.environ.get("TEST_DB")
+    if explicit:
+        return explicit
+    name = base_url.rstrip("/").rsplit("/", 1)[-1]
+    return re.sub(r"_dev", "_test", name, count=1)
 
 
 def _base_dsn() -> str:
@@ -24,6 +36,7 @@ def _base_dsn() -> str:
 
 
 BASE_URL = _base_dsn()
+TEST_DB = _test_db_name(BASE_URL)
 TEST_URL = re.sub(r"/([^/]+)$", "/" + TEST_DB, BASE_URL)
 os.environ["DATABASE_URL"] = TEST_URL
 os.environ["APP_ENV"] = "test"
@@ -37,8 +50,20 @@ from app.main import app  # noqa: E402
 from scripts import bootstrap  # noqa: E402
 
 
-def _server_dsn() -> str:
-    return re.sub(r"\+psycopg", "", BASE_URL)
+def _server_dsns() -> list[str]:
+    """维护连接候选：优先 postgres 库（业务库可能尚未创建）。"""
+    base = re.sub(r"\+psycopg", "", BASE_URL)
+    return [re.sub(r"/([^/]+)$", "/" + name, base) for name in ("postgres", BASE_URL.rstrip("/").rsplit("/", 1)[-1])]
+
+
+def _connect_admin():
+    last: Exception | None = None
+    for dsn in _server_dsns():
+        try:
+            return psycopg.connect(dsn, autocommit=True)
+        except psycopg.OperationalError as exc:
+            last = exc
+    raise RuntimeError(f"无法连接 PostgreSQL 维护库：{last}")
 
 
 def _test_dsn() -> str:
@@ -47,7 +72,7 @@ def _test_dsn() -> str:
 
 @pytest.fixture(scope="session", autouse=True)
 def prepared_database():
-    with psycopg.connect(_server_dsn(), autocommit=True) as conn:
+    with _connect_admin() as conn:
         with conn.cursor() as cur:
             cur.execute("select pg_terminate_backend(pid) from pg_stat_activity where datname = %s", (TEST_DB,))
             cur.execute(f'DROP DATABASE IF EXISTS "{TEST_DB}"')
