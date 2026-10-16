@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+.env
+.pytest_cache/
+var/
+web/node_modules/
+web/dist/
+*.egg-info/

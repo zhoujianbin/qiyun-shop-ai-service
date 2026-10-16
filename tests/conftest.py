@@ -1,0 +1,95 @@
+"""测试夹具：独立测试库、真实 schema、真实服务层数据、TestClient。"""
+import os
+import pathlib
+import re
+import uuid
+
+import pytest
+
+ROOT = pathlib.Path(__file__).resolve().parents[1]
+TEST_DB = "qiyun_shop_test"
+
+
+def _base_dsn() -> str:
+    env_file = ROOT / ".env"
+    url = None
+    if env_file.exists():
+        for line in env_file.read_text(encoding="utf-8").splitlines():
+            if line.startswith("DATABASE_URL="):
+                url = line.split("=", 1)[1].strip()
+    url = os.environ.get("DATABASE_URL", url)
+    if not url:
+        raise RuntimeError("缺少 DATABASE_URL，无法初始化测试库")
+    return url
+
+
+BASE_URL = _base_dsn()
+TEST_URL = re.sub(r"/([^/]+)$", "/" + TEST_DB, BASE_URL)
+os.environ["DATABASE_URL"] = TEST_URL
+os.environ["APP_ENV"] = "test"
+os.environ["LOG_LEVEL"] = "ERROR"
+
+import psycopg  # noqa: E402
+from fastapi.testclient import TestClient  # noqa: E402
+
+from app.core.db import SessionLocal, engine  # noqa: E402
+from app.main import app  # noqa: E402
+from scripts import bootstrap  # noqa: E402
+
+
+def _server_dsn() -> str:
+    return re.sub(r"\+psycopg", "", BASE_URL)
+
+
+def _test_dsn() -> str:
+    return re.sub(r"\+psycopg", "", TEST_URL)
+
+
+@pytest.fixture(scope="session", autouse=True)
+def prepared_database():
+    with psycopg.connect(_server_dsn(), autocommit=True) as conn:
+        with conn.cursor() as cur:
+            cur.execute("select pg_terminate_backend(pid) from pg_stat_activity where datname = %s", (TEST_DB,))
+            cur.execute(f'DROP DATABASE IF EXISTS "{TEST_DB}"')
+            cur.execute(f'CREATE DATABASE "{TEST_DB}"')
+    schema = (ROOT / "db" / "schema.sql").read_text(encoding="utf-8")
+    with psycopg.connect(_test_dsn(), autocommit=True) as conn:
+        with conn.cursor() as cur:
+            cur.execute(schema)
+    with SessionLocal() as db:
+        bootstrap.bootstrap_reference(db)
+        bootstrap.bootstrap_catalog(db)
+        bootstrap.bootstrap_customers(db)
+    engine.dispose()
+    yield
+
+
+@pytest.fixture()
+def client() -> TestClient:
+    return TestClient(app)
+
+
+def login(client: TestClient, username: str, password: str = "Qiyun@2026#Dev", staff: bool = True) -> str:
+    path = "/api/v1/auth/staff/login" if staff else "/api/v1/auth/customer/login"
+    resp = client.post(path, json={"username": username, "password": password})
+    assert resp.status_code == 200, resp.text
+    return resp.json()["access_token"]
+
+
+def auth(token: str, idem: str | None = None) -> dict:
+    headers = {"Authorization": f"Bearer {token}"}
+    if idem is not None:
+        headers["Idempotency-Key"] = idem
+    return headers
+
+
+def new_key() -> str:
+    return uuid.uuid4().hex
+
+
+def staff_token(client: TestClient, username: str = "admin") -> str:
+    return login(client, username, staff=True)
+
+
+def customer_token(client: TestClient, username: str = "buyer_zhang") -> str:
+    return login(client, username, staff=False)

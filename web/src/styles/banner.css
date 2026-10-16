@@ -1,0 +1,34 @@
+/* 首页 Banner 轮播：图片铺满，左侧叠加深色渐变保证文案可读 */
+.qy-banner {
+  position: relative;
+  min-height: 260px;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+}
+
+.qy-banner-image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: right center;
+}
+
+.qy-banner-scrim {
+  position: absolute;
+  inset: 0;
+}
+
+.qy-banner-body {
+  position: relative;
+  z-index: 1;
+  padding: 40px;
+  max-width: 580px;
+}
+
+@media (max-width: 768px) {
+  .qy-banner { min-height: 200px; }
+  .qy-banner-body { padding: 24px 20px; max-width: 100%; }
+}

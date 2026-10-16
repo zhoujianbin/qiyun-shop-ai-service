@@ -1,0 +1,35 @@
+{
+  "name": "qiyun-shop-web",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "栖云智家 第一期 企业电商基础平台 前端工程",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "build:mount": "vite build --base=/static/dist/",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "gen:api": "node scripts/gen-api.mjs"
+  },
+  "dependencies": {
+    "@ant-design/icons": "^5.5.2",
+    "@tanstack/react-query": "^5.62.7",
+    "antd": "^5.22.5",
+    "axios": "^1.7.9",
+    "dayjs": "^1.11.13",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.28.0",
+    "zustand": "^4.5.5"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "openapi-typescript": "^7.4.4",
+    "typescript": "~5.6.3",
+    "vite": "^6.0.3"
+  }
+}

@@ -1,0 +1,39 @@
+from functools import lru_cache
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+
+    app_env: str = "dev"
+    app_name: str = "栖云智家企业电商基础平台"
+    app_version: str = "1.0.0"
+    tenant_id: int = 1
+    database_url: str = "postgresql+psycopg://postgres:postgres@127.0.0.1:5432/qiyun_shop_dev"
+    jwt_secret: str = "change-me-in-production"
+    jwt_algorithm: str = "HS256"
+    jwt_access_ttl_minutes: int = 15
+    jwt_refresh_ttl_days: int = 14
+    cors_origins: str = "http://localhost:5173"
+    payment_provider: str = "mock"
+    demo_mode: bool = True
+    storage_backend: str = "local"
+    storage_local_dir: str = "./var/uploads"
+    log_level: str = "INFO"
+    max_upload_mb: int = 20
+
+    @property
+    def cors_origin_list(self) -> list[str]:
+        return [x.strip() for x in self.cors_origins.split(",") if x.strip()]
+
+    @property
+    def is_prod(self) -> bool:
+        return self.app_env.lower() in ("prod", "production")
+
+
+@lru_cache
+def get_settings() -> Settings:
+    return Settings()
+
+
+settings = get_settings()

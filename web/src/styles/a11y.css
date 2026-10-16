@@ -1,0 +1,10 @@
+:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+.ant-btn:focus-visible, .ant-input:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 1px; }
+.qy-skip-link {
+  position: absolute; left: -9999px; top: 0; z-index: 2000;
+  background: var(--color-primary); color: #fff; padding: 8px 16px; border-radius: 0 0 8px 0;
+}
+.qy-skip-link:focus { left: 0; }
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
+}

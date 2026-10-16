@@ -1,0 +1,7 @@
+html[data-theme='dark'] {
+  --color-bg: #141414;
+  --color-surface: #1f1f1f;
+  --color-text: #f1f5f9;
+  --color-text-muted: #94a3b8;
+  --color-border: #303030;
+}

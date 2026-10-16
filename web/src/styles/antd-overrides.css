@@ -1,0 +1,4 @@
+.qy-page { padding: 16px 24px 32px; }
+.qy-card-block { margin-bottom: 16px; }
+.qy-filter-label { display: inline-block; margin-bottom: 4px; color: var(--color-text-muted); font-size: var(--font-xs); }
+.qy-form-inline .ant-form-item { margin-bottom: 8px; }
