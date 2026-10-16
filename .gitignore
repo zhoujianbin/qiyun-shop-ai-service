@@ -6,3 +6,9 @@ var/
 web/node_modules/
 web/dist/
 *.egg-info/
+
+# 构建/测试产物
+.coverage
+htmlcov/
+*.tsbuildinfo
+.DS_Store
