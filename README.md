@@ -7,7 +7,8 @@
 ## 快速开始
 
 ```bash
-cd qiyun-shop
+git clone https://github.com/zhoujianbin/qiyun-shop-ai-service.git
+cd qiyun-shop-ai-service
 cp .env.example .env                      # 填写本机 PostgreSQL 连接串与 JWT 密钥
 
 python scripts/create_db.py --db qiyun_shop_dev --reset   # 建库 + 应用 45 张表
@@ -15,7 +16,7 @@ python scripts/seed.py --orders 60                        # 生成测试数据
 python -m uvicorn app.main:app --reload --port 8000       # API + 文档 http://127.0.0.1:8000/docs
 
 cd web && npm install && npm run build && npm run dev     # 前端：dev 代理 /api -> 127.0.0.1:8000
-cd .. && python -m pytest -q                             # 45 项测试（含真实 HTTP 端到端）
+cd .. && python -m pytest -q                             # 53 项测试（含真实 HTTP 端到端）
 
 python scripts/check_frontend_contract.py                 # 前端调用 vs 后端契约一致性
 python scripts/export_openapi.py                          # 导出 openapi.json / openapi.yaml
@@ -34,8 +35,8 @@ python scripts/export_openapi.py                          # 导出 openapi.json 
 | API 文档 | http://127.0.0.1:8000/docs | Swagger UI，可直接调试全部接口 |
 | 同源版本 | http://127.0.0.1:8000/ | 由后端直接托管 web/dist 构建产物（含客户端路由回退） |
 
-    终端 1（后端）：cd qiyun-shop && python -m uvicorn app.main:app --port 8000
-    终端 2（前端）：cd qiyun-shop/web && npm run dev
+    终端 1（后端）：cd qiyun-shop-ai-service && python -m uvicorn app.main:app --port 8000
+    终端 2（前端）：cd qiyun-shop-ai-service/web && npm run dev
 
 登录：后台用 admin / ops01 / stock01 / aftersales01 / finance01 / cs01 / auditor01；
 客户端用手机号登录（如 13900000001）。统一口令 Qiyun@2026#Dev。
@@ -121,7 +122,7 @@ python scripts/export_openapi.py                          # 导出 openapi.json 
 ## 目录结构
 
 ```
-qiyun-shop/
+qiyun-shop-ai-service/
 ├── app/
 │   ├── api/v1/       auth、attachment、staff、channel、catalog、inventory、customer、cart、order、payment、
 │   │                 fulfillment、aftersales、refund、invoice、report、webhooks
