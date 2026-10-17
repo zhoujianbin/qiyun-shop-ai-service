@@ -93,6 +93,13 @@ def test_guard_hint_from_escalation_rule(monkeypatch):
     assert "安全" in state.guard_hints[0]
 
 
+def test_order_number_routes_to_tool_branch():
+    """四期：带单号的问题必须确定性进工具分支（QY 与 SO 两种前缀都认）。"""
+    assert assistant_graph.classify_rule("帮我取消订单 QY20261017182948162180") == "REALTIME_FACT"
+    assert assistant_graph.classify_rule("查下 SO20260101001234 的状态") == "REALTIME_FACT"
+    assert assistant_graph.classify_rule("门锁没电了怎么办") is None
+
+
 def test_retrieval_trace_is_persisted(client, monkeypatch):
     monkeypatch.setattr(knowledge_retrieval, "search", _fake_search([HIT]))
     token = customer_token(client, "buyer_zhang")

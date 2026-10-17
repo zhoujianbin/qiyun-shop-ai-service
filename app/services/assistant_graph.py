@@ -140,7 +140,8 @@ class State:
         return time.monotonic() - self.started
 
 
-ORDER_NO_RE = re.compile(r"\bSO\d{6,}\b")
+# 一期种子单号是 QY…，测试用例里用 SO…；两种都要认，否则"查订单/取消订单"进不了工具分支
+ORDER_NO_RE = re.compile(r"\b(?:SO|QY)[0-9]{6,}\b")
 PRODUCT_WORDS = ("型号", "价格", "多少钱", "有货", "在售", "参数", "规格")
 MODEL_CODE_RE = re.compile(r"\bQ[LCHR]-[A-Z0-9]{2,}\b")
 
