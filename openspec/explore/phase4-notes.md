@@ -351,3 +351,93 @@
 | Q5 | 67 实体 / 105 关系够不够 | **暂定够用** |
 | Q6 | 工具清单 9 个 | **已定 A** |
 | Q7 | F21 `identity_level` 处置 | 本轮新提，需拍 |
+---
+
+## 12 图集成与工具协议（第 5 轮）
+
+### 12.1 模型能力实测：`llm.py` 没有 tools 通道
+
+| # | 事实 | 出处 |
+|---|---|---|
+| F22 | `OpenAIProvider._payload()` 只组装 `model/messages/stream/temperature/max_tokens`，**没有 `tools`/`tool_choice`** | `app/integrations/llm.py:70-80` |
+| F23 | `complete()` 的返回只取 `choices[0].message.content`，**丢弃 `tool_calls`** | `app/integrations/llm.py:110-137` |
+| F24 | `FakeProvider` 只会按最后一条 user 文本回固定串，**不会返回 tool_call** | `app/integrations/llm.py:29-54` |
+
+结论：四期必须扩 `llm.py`（加 `tools` 透传 + `tool_calls` 解析 + fake 支持），这是**改三期集成层**，但属"加参数不改语义"，不碰接口/表/前端类型。
+
+### 12.2 一个必须承认的未知
+
+**DeepSeek 是否支持"流式 tool_calls 增量"未实测。** 依赖它会把首字节卡在第一个 tool_call 上。
+规避方案（`[建议]` D9）：**两段式调用**
+
+| 阶段 | 调用方式 | 产出 |
+|---|---|---|
+| 决策 | `complete()` **非流式**，带 `tools` | 要么 `tool_calls`，要么纯文本答案 |
+| 回答 | `stream()` **流式**，不带 tools | 叙述句（事实块由服务端注入） |
+
+代价：事实类问题多一次模型往返；收益：不赌未验证的流式能力。知识类（规则 fast-path 命中）**不进决策阶段**，TTFT 不变。
+
+### 12.3 图结构（不换骨架，只插两个节点）
+
+```
+question
+   |
+   v
+[normalize]  实体识别(alias 最长匹配) → {product_scope, entity_ids}   <-- 新节点
+   |
+   v
+ [plan]      规则词表 fast-path：KNOWLEDGE / FACT / IDENTITY / HUMAN
+   |
+   +-- KNOWLEDGE --> [retrieve] search(filters={product_scope})
+   |                    --> [expand] 深度1 邻接实体，最多再检索 1 次，hits 合并去重
+   |                    --> [finalize]
+   |
+   +-- FACT ------> [tool_loop] 最多 3 次工具调用（总步数仍受 MAX_STEPS=4 约束）
+   |                   +-- 只读 → 执行 → 结果回填模型
+   |                   +-- 写   → propose 落 pending_action → **本轮结束**
+   |
+   +-- IDENTITY --> 回 IDENTITY_REQUEST（不调模型、不调工具）
+   +-- HUMAN -----> HANDOFF
+```
+
+**为什么本体查询必须在检索前**：`search()` 的 `filters` 只能过滤 `knowledge.document`（`category`/`product_scope`），**召回后无法再过滤**（F18）。所以实体归一只能是检索前的节点；一跳扩展是检索后的第二次检索。
+
+**为什么写确认不用 checkpointer**：三期图无持久化状态（D13）。确认是**新请求** `POST /ai/actions/{id}/confirm`，服务端从 `pending_action` 表恢复参数、独立执行、写一条 ASSISTANT 消息 + 审计。**不恢复图**，也就不需要 LangGraph checkpointer。
+
+### 12.4 注册表放哪：**代码，不建表**（对齐二期教训）
+
+9 个工具、变更随发版走。若建 `assistant.tool_registry` 表，就重演二期 `product_catalog.yaml` vs `commerce.product.model_code` 的**双真源**问题（`phase2-decisions.md:44` D5 明确判定为要消除的）。
+故：**工具定义 = 代码单一真源**（`app/services/tool_registry.py` 的 `TOOLS` 字典，沿用三期 `ToolSpec`）；开关与灰度用 `tool:*` 权限码 + `settings` 控制，**零新表**。
+
+### 12.5 表数账（当前 61）
+
+| 动作 | 表 | 累计 |
+|---|---|---|
+| 新建 `ontology` schema | entity / relation / alias / entity_tag / chunk_entity | 66 |
+| 新建 `assistant` 扩展 | pending_action / tool_call | **68** |
+| 不建 | tool_registry（代码真源）、评测用例表（文件为真源）、eval_run（报告文件） | 68 |
+
+### 12.6 `retrieval_trace` 不扩字段
+
+工具调用进新表 `assistant.tool_call`（`message_id, tool_name, args jsonb, status, latency_ms, error_code, proposal_id?`），理由：评测要按工具统计成功率/时延，jsonb 塞进 `retrieval_trace.hits` 无法 JOIN，且会污染"检索留痕"的语义。
+
+### 12.7 SSE 新增 2 个事件（不改老 6 个）
+
+| 事件 | 载荷 | 前端用途 |
+|---|---|---|
+| `tool` | `{name, status: running\|ok\|failed, latency_ms}` | 显示"正在查询订单…"骨架，掩盖决策阶段的等待 |
+| `action` | `{id, tool, summary, impact, irreversible, expires_at}` | 渲染确认卡片（确认/取消按钮） |
+
+前端影响：`web/src/types/assistant.ts` 的 `StreamEvent` 从 6 增到 8；`openapi.yaml` + `check_frontend_contract.py` 需同步。**老事件载荷一字不改。**
+
+---
+
+## 13 累计待决
+
+| # | 问题 | 状态 |
+|---|---|---|
+| Q4 | chunk↔entity 映射 | 暂定 A（新表 + 逻辑键） |
+| Q5 | 67 实体 / 105 关系 | 暂定够用 |
+| Q6 | 工具清单 9 个 | **已定 A** |
+| Q7 | F21 处置 | **已定 A**（服务端推导，字段不动） |
+| Q8 | 两段式模型调用（非流式决策 + 流式回答） | 本轮新提 |
