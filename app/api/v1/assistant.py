@@ -250,6 +250,12 @@ def _finish(db: Session, message: Message, status: str, content: str, *, latency
         meta["plan"] = state.plan
         meta["intent"] = state.intent
         meta["degraded"] = state.degraded
+        # 四期：本体归一的留痕（实体 + 映射到的产品范围），便于排查"为什么收窄/没收窄"
+        meta["ontology"] = {
+            "entities": [item.get("code") for item in (state.entities or [])],
+            "product_scope": state.product_scope,
+            "expanded": state.expanded,
+        }
         message.metadata_json = meta
         for citation in state.citations:
             db.add(Citation(

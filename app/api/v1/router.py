@@ -6,6 +6,7 @@ from app.api.v1 import (
 )
 from app.api.v1 import assistant
 from app.api.v1 import knowledge
+from app.api.v1 import ontology
 
 api_router = APIRouter()
 api_router.include_router(auth.router)
@@ -26,4 +27,5 @@ api_router.include_router(invoice.router)
 api_router.include_router(report.router)
 api_router.include_router(webhooks.router)
 api_router.include_router(knowledge.router)
+api_router.include_router(ontology.router)
 api_router.include_router(assistant.router)

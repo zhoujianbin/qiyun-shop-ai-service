@@ -16,14 +16,14 @@
 - [x] 2.3 别名最长匹配器：`alias` 表 + 最长优先 + 上位词不误判；验证：`C5`
 - [x] 2.4 递归 CTE 遍历（`depth` 列 + 路径数组防环），两种用途（1 跳检索 / 2 跳取证）；验证：`C3`、`C4`
 - [x] 2.5 `chunk_entity` 回填与 `relink`（逻辑键 `document_id+version+chunk_ord`）；验证：`C7`（换版重挂且抽取调用次数为 0）；实测 452 条映射覆盖 81/158 篇，二次执行 inserted=0
-- [ ] 2.6 后台接口：`/knowledge/ontology/{import,entities,relations,aliases,review,graph,chunks/relink}`，带 `response_model`、`ontology:*` 权限、写接口 `Idempotency-Key`；验证：契约检查通过
+- [x] 2.6 后台接口：`/knowledge/ontology/{import,entities,relations,aliases,review,graph,chunks/relink}`，带 `response_model`、`ontology:*` 权限、写接口 `Idempotency-Key`；验证：契约检查通过
 
 ## 3 本体↔检索集成
 
-- [ ] 3.1 `assistant_graph.py` 新增 `normalize` 节点：问题 → 实体 → `{product_scope, entity_ids}`；验证：`C5` 场景 + `search()` 收到的 filters 断言
-- [ ] 3.2 检索调用**只传** `category`/`product_scope`；零实体命中时 filters 为空；验证：`git diff app/services/knowledge_retrieval.py` 为空（`C6` 一票否决）
-- [ ] 3.3 检索后一跳扩展：邻接实体最多再检索 1 次，hits 合并去重后重编 `rank`，步数仍受 `MAX_STEPS=4`；验证：`C3` 与既有闸门用例全绿
-- [ ] 3.4 `citation.entity_tags` 改由本体回填（移除正则抽取），`citation` 表结构不动；验证：标签值 ∈ `ontology.entity.code`
+- [x] 3.1 `assistant_graph.py` 新增 `normalize` 节点：问题 → 实体 → `{product_scope, entity_ids}`；验证：`C5` 场景 + `search()` 收到的 filters 断言
+- [x] 3.2 检索调用**只传** `category`/`product_scope`；零实体命中时 filters 为空；验证：`git diff app/services/knowledge_retrieval.py` 为空（`C6` 一票否决）
+- [x] 3.3 检索后一跳扩展：邻接实体最多再检索 1 次，hits 合并去重后重编 `rank`，步数仍受 `MAX_STEPS=4`；验证：`C3` 与既有闸门用例全绿
+- [x] 3.4 `citation.entity_tags` 改由本体回填（移除正则抽取），`citation` 表结构不动；验证：标签值 ∈ `ontology.entity.code`
 
 ## 4 工具协议（`llm.py` 改造）
 

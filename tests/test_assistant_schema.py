@@ -1,10 +1,12 @@
-"""三期数据地基：assistant schema、6 张表、ai:* 权限码与坐席角色。"""
+"""三期数据地基：assistant schema（四期 8 张表）、ai:* 权限码与坐席角色。"""
 from sqlalchemy import text
 
 from app.core.db import SessionLocal
 
 ASSISTANT_TABLES = {
     "conversation", "message", "citation", "handoff", "identity_verification", "retrieval_trace",
+    # 四期：待确认动作与工具调用留痕
+    "pending_action", "tool_call",
 }
 
 
@@ -13,7 +15,7 @@ def _scalar(sql: str):
         return db.execute(text(sql)).scalar_one()
 
 
-def test_assistant_schema_has_six_tables():
+def test_assistant_schema_has_eight_tables():
     with SessionLocal() as db:
         rows = db.execute(text(
             "select table_name from information_schema.tables"
@@ -72,9 +74,21 @@ def test_agent_roles_and_grants():
             " where r.code='CS_SUPERVISOR' and p.code like 'ai:%'"
         )).scalars().all())
     assert {"AI_AGENT", "AI_SUPERVISOR"} <= roles
-    assert agent == {"ai:chat:read", "ai:chat:write", "ai:handoff:read", "ai:handoff:write"}
-    assert supervisor == {"ai:chat:read", "ai:chat:write", "ai:handoff:read", "ai:handoff:write", "ai:trace:read"}
+    # 四期：坐席追加 tool:read（只读工具），写工具只给主管
+    assert agent == {"ai:chat:read", "ai:chat:write", "ai:handoff:read", "ai:handoff:write",
+                     "tool:read"}
+    # supervisor 这一条只统计 ai:* （查询里带了 like 'ai:%'），tool:* 单独断言
+    assert supervisor == {"ai:chat:read", "ai:chat:write", "ai:handoff:read", "ai:handoff:write",
+                          "ai:trace:read"}
     assert cs == {"ai:handoff:read"}
+    with SessionLocal() as db:
+        supervisor_tools = set(db.execute(text(
+            "select p.code from shared.app_role_permission rp"
+            " join shared.app_role r on r.id=rp.role_id"
+            " join shared.app_permission p on p.id=rp.permission_id"
+            " where r.code='AI_SUPERVISOR' and p.code like 'tool:%'"
+        )).scalars().all())
+    assert supervisor_tools == {"tool:read", "tool:write:order", "tool:write:aftersales"}
 
 
 def test_phone_tail_check_rejects_non_digits():

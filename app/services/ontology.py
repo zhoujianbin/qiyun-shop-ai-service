@@ -644,6 +644,31 @@ def relink_chunks(db: Session, actor: dict) -> dict:
     return {"relinked": len(result)}
 
 
+def product_scope_covered(db: Session, scope: str | None) -> bool:
+    """该产品范围在二期文档里是否真的有覆盖；没覆盖就不加过滤，避免把召回打成 0。"""
+    if not scope:
+        return False
+    count = db.execute(text(
+        "SELECT count(*) FROM knowledge.document d"
+        " JOIN knowledge.document_version dv ON dv.document_pk = d.id"
+        " WHERE d.product_scope = :scope AND dv.status = 'ACTIVE' AND d.tenant_id = :tenant"
+    ), {"scope": scope, "tenant": settings.tenant_id}).scalar_one()
+    return bool(count)
+
+
+def chunk_entity_codes(db: Session, document_id: str | None, version: int | None,
+                       chunk_ord: int | None) -> set[str]:
+    if not document_id or version is None or chunk_ord is None:
+        return set()
+    rows = db.execute(
+        select(Entity.code).join(ChunkEntity, ChunkEntity.entity_id == Entity.id).where(
+            ChunkEntity.document_id == document_id, ChunkEntity.version == version,
+            ChunkEntity.chunk_ord == chunk_ord, ChunkEntity.status == "APPROVED",
+            Entity.status == "APPROVED")
+    ).scalars().all()
+    return set(rows)
+
+
 def entities_of_chunk(db: Session, document_id: str, version: int, chunk_ord: int) -> list[Entity]:
     rows = db.execute(
         select(Entity).join(ChunkEntity, ChunkEntity.entity_id == Entity.id).where(

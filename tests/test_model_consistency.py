@@ -29,7 +29,7 @@ def ddl_columns() -> dict[tuple[str, str], set[str]]:
     result = {}
     for m in re.finditer(r"CREATE TABLE\s+(\w+)\.(\w+)\s*\(", DDL):
         schema, table = m.group(1), m.group(2)
-        if schema not in ("shared", "commerce", "knowledge", "assistant"):
+        if schema not in ("shared", "commerce", "knowledge", "assistant", "ontology"):
             continue
         start = m.end()
         depth, end = 1, start
@@ -89,7 +89,7 @@ def test_primary_keys_match():
     ddl_pk = {}
     for m in re.finditer(r"CREATE TABLE\s+(\w+)\.(\w+)\s*\(", DDL):
         schema, table = m.group(1), m.group(2)
-        if schema not in ("shared", "commerce", "knowledge", "assistant"):
+        if schema not in ("shared", "commerce", "knowledge", "assistant", "ontology"):
             continue
         start = m.end()
         depth, end = 1, start

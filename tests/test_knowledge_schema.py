@@ -26,15 +26,15 @@ NEW_TABLES = {
 }
 
 
-def test_base_table_count_is_55():
+def test_base_table_count_is_68():
     with SessionLocal() as db:
         total = db.execute(text(
             "select count(*) from information_schema.tables"
-            " where table_schema in ('shared','commerce','knowledge','assistant')"
+            " where table_schema in ('shared','commerce','knowledge','assistant','ontology')"
             " and table_type = 'BASE TABLE'"
         )).scalar_one()
-    # 二期收口 55；三期 assistant schema 6 张表后为 61
-    assert total == 61
+    # 一期 43 + 二期 12 = 55；三期 +6 = 61；四期 +5（ontology）+2（assistant）= 68
+    assert total == 68
 
 
 def test_new_tables_exist():

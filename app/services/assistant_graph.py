@@ -22,7 +22,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.models.generated import Rule
-from app.services import knowledge_retrieval
+from app.services import knowledge_retrieval, ontology
 
 logger = logging.getLogger(__name__)
 
@@ -130,6 +130,9 @@ class State:
     citations: list[dict] = field(default_factory=list)
     guard_hints: list[str] = field(default_factory=list)
     prompt_messages: list[dict] = field(default_factory=list)
+    entities: list[dict] = field(default_factory=list)   # 四期：本体归一结果
+    product_scope: str | None = None                     # 四期：映射到二期已有过滤键
+    expanded: bool = False                               # 四期：是否已做过一跳扩展
     degraded: bool = False
     started: float = field(default_factory=time.monotonic)
 
@@ -186,7 +189,10 @@ def rewrite_query(question: str) -> str:
 def search_knowledge(db: Session, state: dict, args: dict) -> dict:
     result = knowledge_retrieval.search(
         db, args.get("query") or state["question"],
-        top_k=args.get("top_k", TOP_K), actor=args.get("actor"), identity_level=args.get("identity_level", "public"),
+        top_k=args.get("top_k", TOP_K), actor=args.get("actor"),
+        identity_level=args.get("identity_level", "public"),
+        # 四期：只用二期已经支持的过滤键，不新增检索能力
+        filters=args.get("filters") or None,
     )
     return {"hits": result["hits"], "latency_ms": result["debug"]["latency_ms"]}
 
@@ -223,12 +229,46 @@ def plan(state: State) -> State:
     return state
 
 
+def normalize(db: Session, state: State) -> State:
+    """检索前实体归一：把问题映射到本体实体，并转成二期已支持的过滤键。
+
+    零命中时不带任何过滤，检索行为与三期完全一致。
+    """
+    try:
+        result = ontology.normalize_question(db, state.question)
+    except Exception as exc:  # noqa: BLE001 - 本体不可用不能拖垮问答
+        logger.warning("本体归一失败，退化为原样检索：%s", exc)
+        result = {"entities": [], "product_scope": None}
+    state.entities = result.get("entities") or []
+    state.product_scope = result.get("product_scope")
+    # 归一不是一次检索，不写 retrieval_trace；结果随消息元数据留痕
+    return state
+
+
+def _filters(db: Session, state: State) -> dict | None:
+    """只在二期文档对该产品范围确有覆盖时才加过滤。
+
+    实测二期 158 篇文档的 product_scope 全为 NULL，无条件过滤会把召回打成 0；
+    因此这里做覆盖守卫，未覆盖时检索行为与三期完全一致。
+    """
+    if not state.product_scope:
+        return None
+    try:
+        covered = ontology.product_scope_covered(db, state.product_scope)
+    except Exception as exc:  # noqa: BLE001 - 守卫失败按不过滤处理
+        logger.warning("产品范围覆盖检查失败：%s", exc)
+        return None
+    return {"product_scope": state.product_scope} if covered else None
+
+
 def execute(db: Session, state: State, *, actor: dict | None, identity_level: str = "public") -> State:
     if state.decision != "ANSWER":
         return state
     state.steps += 1
     observation = TOOLS["search_knowledge"].run(
-        db, {"question": state.question}, {"query": state.question, "actor": actor, "identity_level": identity_level}
+        db, {"question": state.question},
+        {"query": state.question, "actor": actor, "identity_level": identity_level,
+         "filters": _filters(db, state)},
     )
     state.observations.append({"tool": "search_knowledge", "ok": True, **observation})
     state.hits = observation["hits"]
@@ -244,10 +284,91 @@ def replan(db: Session, state: State, *, actor: dict | None, identity_level: str
     rewritten = rewrite_query(state.question)
     state.observations.append({"tool": "search_knowledge", "query": rewritten, "rewrite": True})
     observation = TOOLS["search_knowledge"].run(
-        db, {"question": state.question}, {"query": rewritten, "actor": actor, "identity_level": identity_level}
+        db, {"question": state.question},
+        {"query": rewritten, "actor": actor, "identity_level": identity_level,
+         "filters": _filters(db, state)},
     )
     state.observations[-1].update({"ok": True, **observation})
     state.hits = observation["hits"]
+    return state
+
+
+def rank_by_ontology(db: Session, state: State) -> State:
+    """本体参与排序：命中切片若挂到归一实体（或邻接实体），前置并保持其余原序。
+
+    这是"本体影响检索"的兜底手段——二期 product_scope 未回填时，过滤条件用不上，
+    但切片映射（chunk_entity）是四期自己可控的，可以稳定地改变排序。
+    """
+    if not state.hits or not state.entities:
+        return state
+    entity_codes = {item["code"] for item in state.entities}
+    try:
+        boosted, rest = [], []
+        for hit in state.hits:
+            codes = ontology.chunk_entity_codes(db, hit.get("document_id"), hit.get("version"),
+                                                hit.get("chunk_ord"))
+            (boosted if codes & entity_codes else rest).append(hit)
+    except Exception as exc:  # noqa: BLE001 - 排序失败不影响召回
+        logger.warning("本体排序失败：%s", exc)
+        return state
+    if boosted and rest:
+        state.hits = [*boosted, *rest]
+        state.observations.append({"tool": "ontology_rank", "ok": True,
+                                   "boosted": len(boosted), "rest": len(rest)})
+    return state
+
+
+def _merge_hits(first: list[dict], second: list[dict]) -> list[dict]:
+    """按 (document_id, version, chunk_ord) 去重，首个来源优先级更高，重编 rank 由调用方负责。"""
+    seen: set[tuple] = set()
+    merged: list[dict] = []
+    for hit in [*first, *second]:
+        key = (hit.get("document_id"), hit.get("version"), hit.get("chunk_ord"))
+        if key in seen:
+            continue
+        seen.add(key)
+        merged.append(hit)
+    return merged
+
+
+def expand(db: Session, state: State, *, actor: dict | None, identity_level: str = "public") -> State:
+    """检索后一跳扩展：借邻接实体的产品范围再检索一次，hits 合并去重。
+
+    只有"归一命中了实体、还有剩余步数、且邻接存在其它产品范围"时才动，
+    否则完全保持三期行为。
+    """
+    if state.decision != "ANSWER" or state.expanded or state.steps >= MAX_STEPS:
+        return state
+    if not state.product_scope or not state.entities:
+        return state
+    state.expanded = True
+    neighbor_scopes: list[str] = []
+    try:
+        for entity in state.entities:
+            node = ontology.graph(db, int(entity["id"]), depth=1)
+            for item in node["nodes"]:
+                code = item["entity"]["code"]
+                if item["entity"]["kind"] == "product" and code != state.product_scope:
+                    if code not in neighbor_scopes:
+                        neighbor_scopes.append(code)
+    except Exception as exc:  # noqa: BLE001 - 扩展失败按无扩展处理
+        logger.warning("本体邻接查询失败，跳过扩展：%s", exc)
+        return state
+    if not neighbor_scopes:
+        return state
+    state.steps += 1
+    observation = TOOLS["search_knowledge"].run(
+        db, {"question": state.question},
+        {"query": state.question, "actor": actor, "identity_level": identity_level,
+         "filters": {"product_scope": neighbor_scopes[0]}},
+    )
+    before = len(state.hits)
+    state.hits = _merge_hits(state.hits, observation["hits"])
+    state.observations.append({
+        "tool": "ontology_expand", "ok": True, "query": state.question,
+        "scope": neighbor_scopes[0], "added": len(state.hits) - before,
+        "hits": observation["hits"], "latency_ms": observation.get("latency_ms"),
+    })
     return state
 
 
@@ -280,16 +401,46 @@ def relevance_ok(question: str, hits: list[dict]) -> bool:
     return any(relevance_of(question, hit) >= threshold for hit in hits[:3])
 
 
-def build_citations(hits: list[dict]) -> list[dict]:
+TAG_KIND_ORDER = {"product": 0, "policy": 1, "part": 2, "fault": 3, "accessory": 4, "action": 5}
+MAX_TAGS_PER_CITATION = 8
+
+
+def _ontology_tags(db: Session, hit: dict) -> list[dict]:
+    """四期：优先用本体映射（chunk_entity）生成标签；本体没覆盖时由调用方回退到正则。"""
+    try:
+        rows = ontology.entities_of_chunk(db, hit.get("document_id"), hit.get("version"),
+                                          hit.get("chunk_ord"))
+    except Exception as exc:  # noqa: BLE001 - 本体不可用不影响引用生成
+        logger.warning("本体标签查询失败：%s", exc)
+        return []
+    ordered = sorted(rows, key=lambda e: (TAG_KIND_ORDER.get(e.kind, 9), e.code))
+    tags: list[dict] = []
+    for entity in ordered[:MAX_TAGS_PER_CITATION]:
+        if entity.kind == "product":
+            tags.append({"type": "product_line", "value": entity.code})
+        elif entity.kind == "policy":
+            tags.append({"type": "rule_id", "value": entity.code})
+        else:
+            tags.append({"type": entity.kind, "value": entity.code})
+    return tags
+
+
+def _regex_tags(hit: dict) -> list[dict]:
+    snippet = hit.get("snippet") or ""
+    tags: list[dict] = []
+    match = PRODUCT_RE.search(snippet) or PRODUCT_RE.search(hit.get("title_path") or "")
+    if match:
+        tags.append({"type": "product_line", "value": match.group(0)})
+    for rule_id in RULE_RE.findall(snippet):
+        tags.append({"type": "rule_id", "value": rule_id})
+    return tags
+
+
+def build_citations(db: Session, hits: list[dict]) -> list[dict]:
     citations = []
     for rank, hit in enumerate(hits):
         snippet = hit.get("snippet") or ""
-        tags = []
-        if PRODUCT_RE.search(snippet) or PRODUCT_RE.search(hit.get("title_path") or ""):
-            match = PRODUCT_RE.search(snippet) or PRODUCT_RE.search(hit.get("title_path") or "")
-            tags.append({"type": "product_line", "value": match.group(0)})
-        for rule_id in RULE_RE.findall(snippet):
-            tags.append({"type": "rule_id", "value": rule_id})
+        tags = _ontology_tags(db, hit) or _regex_tags(hit)
         citations.append({
             "chunk_id": hit.get("chunk_id"),
             "document_id": hit.get("document_id"),
@@ -342,7 +493,7 @@ def finalize(db: Session, state: State, *, history: list[dict]) -> State:
         if not state.hits:
             state.decision = "CLARIFY" if len(state.question) < 12 else "REFUSE"
         else:
-            state.citations = build_citations(state.hits)
+            state.citations = build_citations(db, state.hits)
             state.guard_hints = guard_hints(db, state.question)
             context = "\n\n".join(
                 f"[{hit['document_id']} v{hit['version']}] {hit['title_path']}\n{hit['snippet']}"
@@ -368,6 +519,7 @@ def run(db: Session, question: str, *, actor: dict | None, history: list[dict],
         identity_level: str = "public") -> State:
     """跑一遍编排；返回最终 state（decision/citations/prompt_messages）。"""
     state = State(question=question)
+    normalize(db, state)
     plan(state)
     while state.steps < MAX_STEPS and state.decision == "ANSWER" and not state.hits:
         execute(db, state, actor=actor, identity_level=identity_level)
@@ -376,6 +528,9 @@ def run(db: Session, question: str, *, actor: dict | None, history: list[dict],
         replan(db, state, actor=actor, identity_level=identity_level)
         if not state.hits or state.replans >= MAX_REPLANS:
             break
+    if state.hits:
+        rank_by_ontology(db, state)
+        expand(db, state, actor=actor, identity_level=identity_level)
     return finalize(db, state, history=history)
 
 
