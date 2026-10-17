@@ -37,7 +37,9 @@ def test_openai_stream_drops_reasoning_content(monkeypatch):
         return httpx.Response(200, text=body, headers={"content-type": "text/event-stream"})
 
     provider = llm.OpenAIProvider(transport=httpx.MockTransport(handler))
-    text = "".join(provider.stream(MESSAGES))
+    # 四期：stream() 改为结构化事件，文本在 ("content", {...}) 里
+    text = "".join(payload["text"] for kind, payload in provider.stream(MESSAGES)
+                   if kind == "content")
     assert text == "先用机械钥匙开门"
     assert "思考" not in text
 
