@@ -47,6 +47,8 @@ class Settings(BaseSettings):
     assistant_retention_days: int = 90
     assistant_use_llm_planner: bool = False      # 三期无工具，默认关；四期有工具时再打开
     assistant_relevance_min_ratio: float = 0.2   # 问题与 top 命中关键词重合度下限
+    # 四期：客户侧自助写操作的开关（员工侧始终按 tool:write:* 权限码判定）
+    assistant_customer_write_enabled: bool = True
 
     @property
     def cors_origin_list(self) -> list[str]:

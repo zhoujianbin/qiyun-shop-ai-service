@@ -52,6 +52,11 @@ export default function ChatPage() {
   // 四期：待确认动作（写工具只生成它，确认后才真正提交）
   const [pending, setPending] = useState<PendingAction | null>(null);
   const [acting, setActing] = useState(false);
+  // 四期：核验入口（订单号 + 收货手机后四位）；核验后 30 分钟内可查该单
+  const [verifyOpen, setVerifyOpen] = useState(false);
+  const [verifyForm, setVerifyForm] = useState({ order_no: '', phone_tail: '' });
+  const [verified, setVerified] = useState<{ order_no: string; expires_at?: string } | null>(null);
+  const [verifying, setVerifying] = useState(false);
   const answerIdRef = useRef<number | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
@@ -220,10 +225,70 @@ export default function ChatPage() {
         extra={(
           <Space>
             <Button onClick={() => create.mutate()} disabled={sending}>新对话</Button>
+            <Button
+              onClick={() => setVerifyOpen(true)}
+              disabled={selectedId === null || sending}
+            >
+              核验身份
+            </Button>
             <Button onClick={() => handoff.mutate()} disabled={selectedId === null}>转人工</Button>
           </Space>
         )}
       />
+
+      <Modal
+        open={verifyOpen}
+        title="核验身份"
+        okText="核验"
+        confirmLoading={verifying}
+        onCancel={() => setVerifyOpen(false)}
+        onOk={async () => {
+          if (selectedId === null) return;
+          if (verifyForm.phone_tail.length !== 4) {
+            message.warning('请填写手机号后四位（4 位数字）');
+            return;
+          }
+          setVerifying(true);
+          try {
+            const result = await assistantApi.verifyIdentity(selectedId, verifyForm);
+            if (result.verified) {
+              setVerified({ order_no: verifyForm.order_no, expires_at: result.expires_at });
+              message.success('核验通过，30 分钟内可查询该订单');
+              setVerifyOpen(false);
+            } else {
+              message.error(result.message || '核验未通过');
+            }
+          } catch (error) {
+            message.error((error as Error).message || '核验失败');
+          } finally {
+            setVerifying(false);
+          }
+        }}
+      >
+        <Space direction="vertical" style={{ width: '100%' }}>
+          <Typography.Text type="secondary">
+            订单号与下单手机号后四位必须与订单一致；连续核验失败 3 次会转人工。
+          </Typography.Text>
+          <Input
+            placeholder="订单号，如 QY2026..."
+            value={verifyForm.order_no}
+            onChange={(event) => setVerifyForm((prev) => ({ ...prev, order_no: event.target.value }))}
+          />
+          <Input
+            placeholder="收货手机号后四位"
+            maxLength={4}
+            value={verifyForm.phone_tail}
+            onChange={(event) => setVerifyForm((prev) => ({ ...prev, phone_tail: event.target.value }))}
+          />
+        </Space>
+      </Modal>
+
+      {verified ? (
+        <Typography.Text type="success" style={{ display: 'block', marginBottom: 8 }}>
+          已核验订单 {verified.order_no}
+          {verified.expires_at ? `（有效期至 ${formatTime(verified.expires_at)}）` : ''}
+        </Typography.Text>
+      ) : null}
 
       <Row gutter={12}>
         <Col xs={24} md={8} lg={7}>

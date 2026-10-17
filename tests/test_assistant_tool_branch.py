@@ -70,19 +70,34 @@ def test_identity_gate_blocks_unverified_tool(monkeypatch, scripted):
     assert assistant_graph.fixed_answer(state) == assistant_graph.IDENTITY_REQUEST_TEXT
 
 
-def test_write_tool_is_not_offered_and_rejected(scripted):
-    # 只读清单里没有写工具，因此即使脚本硬给一个也会被拒
+def test_write_tool_is_not_offered_to_staff_without_permission(scripted):
+    """员工没有 tool:write:* 时，写工具不在清单里，硬给也会被拒。"""
     names = [item["function"]["name"] for item in tool_registry.llm_tools(include_write=False)]
     assert "cancel_order" not in names
     scripted([{"name": "cancel_order", "arguments": {"order_no": "SO1"}}])
     with SessionLocal() as db:
         state = assistant_graph.State(question="帮我取消订单 SO1", conversation_id=None)
         assistant_graph.plan(state)
-        state = assistant_graph.tool_loop(db, state, actor={"id": 1, "party": "CUSTOMER"},
-                                          identity_level="public", history=[])
+        state = assistant_graph.tool_loop(db, state,
+                                          actor={"id": 1, "party": "STAFF"},
+                                          identity_level="agent", history=[],
+                                          permissions=set())
     assert state.tool_calls[0]["status"] == "REJECTED"
     assert state.tool_calls[0]["error_code"] == "TOOL_NOT_ALLOWED"
     assert state.facts == []
+
+
+def test_customer_write_requires_conversation_context(scripted):
+    """客户侧写能力靠开关放行，但没有会话上下文时仍然拒绝（不能凭空生成动作）。"""
+    scripted([{"name": "cancel_order", "arguments": {"order_no": "SO1"}}])
+    with SessionLocal() as db:
+        state = assistant_graph.State(question="帮我取消订单 SO1", conversation_id=None)
+        assistant_graph.plan(state)
+        state = assistant_graph.tool_loop(db, state,
+                                          actor={"id": 1, "party": "CUSTOMER",
+                                                 "customer_id": 1},
+                                          identity_level="public", history=[])
+    assert state.tool_calls[0]["error_code"] == "IDENTITY_REQUIRED"
 
 def test_stream_emits_tool_event_before_delta_and_hides_tool_calls(client, monkeypatch):
     """B2 回归：工具事件先于文本增量；tool_calls 原始结构永不出现在事件流里。"""

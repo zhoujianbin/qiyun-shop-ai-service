@@ -43,6 +43,7 @@ REALTIME_WORDS = ("到哪了", "到哪儿", "几天能到", "还有多少库存"
 IDENTITY_WORDS = ("我的订单", "退款进度", "物流", "快递", "发票", "绑定", "我的设备")
 IDENTITY_REQUEST_TEXT = "需要先核验身份：请提供订单号与下单手机号后四位。"
 ACTION_PENDING_TEXT = "请确认下面的操作，我才会真正提交；未确认前不会改动订单。"
+ACTION_FORBIDDEN_TEXT = "这类操作需要人工客服协助，我这边不能直接办理，建议转人工处理。"
 
 # escalation 规则的 triggers 是英文标识符，用户提问是中文——必须配中文别名表才可能命中。
 # 真源：knowledge_raw/13_结构化规则/escalation_aliases.yaml（业务可维护）；
@@ -297,6 +298,10 @@ TOOL_SYSTEM_PROMPT = (
     "你是栖云智家客服助手。需要订单、物流、支付、售后、发票或商品事实时，调用相应工具；"
     "只查知识政策时用 search_knowledge。不要重复调用同一个工具，最多 3 次。"
     "用户没有给出订单号时不要调用订单类工具。"
+    "工具返回失败或查不到时，只说明未查到并请用户核对后重试，"
+    "不得推测失败原因，不得描述订单号格式、前缀或任何业务规则。"
+    "只要用户给出了订单号且会话已通过核验，就必须调用订单类工具去查，"
+    "不要重复索要订单号或手机号后四位。"
 )
 
 
@@ -346,7 +351,11 @@ def stream_tool_answer(db: Session, state: State, *, actor: dict | None, identit
     纯文本轮次则边收边发。
     """
     permissions = permissions or set()
-    allow_write = bool(permissions & set(action_service.WRITE_TOOL_PERMISSION.values()))
+    if (actor or {}).get("party") == "STAFF":
+        allow_write = bool(permissions & set(action_service.WRITE_TOOL_PERMISSION.values()))
+    else:
+        # 客户侧不持有 tool:* 权限码，写能力由开关 + 核验门禁控制
+        allow_write = settings.assistant_customer_write_enabled
     schemas = tool_registry.llm_tools(include_write=allow_write)
     messages = [{"role": "system", "content": TOOL_SYSTEM_PROMPT}, *history,
                 {"role": "user", "content": state.question}]
@@ -400,11 +409,19 @@ def stream_tool_answer(db: Session, state: State, *, actor: dict | None, identit
                     return
             if not spec.read_only:
                 needed = action_service.WRITE_TOOL_PERMISSION.get(spec.name)
-                if needed and needed not in permissions:
+                party = (actor or {}).get("party")
+                if party == "STAFF":
+                    allowed = not needed or needed in permissions
+                else:
+                    # 客户侧不持有 tool:* 权限码：按"是否已核验 + 租户开关"放行，
+                    # 写操作本身仍受二次确认、幂等与审计约束（design 业1=B 白名单灰度）
+                    allowed = settings.assistant_customer_write_enabled
+                if not allowed:
                     state.tool_calls.append({"tool_name": spec.name, "args": args,
                                              "status": "REJECTED", "error_code": "PERM_FORBIDDEN",
                                              "latency_ms": 0})
                     yield ("tool", {"name": spec.name, "status": "failed", "latency_ms": 0})
+                    yield ("text", ACTION_FORBIDDEN_TEXT)
                     return
                 if conversation is None or message_id is None:
                     state.tool_calls.append({"tool_name": spec.name, "args": args,
@@ -673,7 +690,10 @@ def guard_hints(db: Session, question: str) -> list[str]:
     return sorted(set(hints))
 
 
-FACT_BLOCK_HEADER = "以下为业务系统返回的事实（权威），回答中不要改写其中的金额、单号与时间："
+FACT_BLOCK_HEADER = (
+    "以下为业务系统返回的事实（权威），回答中不要改写其中的金额、单号与时间；"
+    "标注为调用失败的条目只说明未查到，不要推测原因或补充业务规则："
+)
 
 
 def _fact_block(state: State) -> str:
@@ -783,6 +803,7 @@ def fixed_answer(state: State) -> str:
         "SCOPE": SCOPE_TEXT,
         "IDENTITY_REQUEST": IDENTITY_REQUEST_TEXT,
         "ACTION_PROPOSED": ACTION_PENDING_TEXT,
+        "ACTION_FORBIDDEN": ACTION_FORBIDDEN_TEXT,
         "CLARIFY": CLARIFY_TEXT,
         "REFUSE": REFUSE_TEXT,
         "ANSWER": "",
