@@ -187,3 +187,84 @@
 |---|---|---|
 | Q4 | chunk↔entity 映射怎么落 | A 新表 `ontology.chunk_entity`（逻辑键 = document_id+version+chunk_ord）/ B 零表，检索前现算实体匹配 / C 写进 `chunk.metadata`（需改二期导入代码并全量重导） |
 | Q5 | 67 实体 / 105 关系是否算"够用" | 是 / 缩到 3 产品线 / 扩到含状态机与角色 |
+---
+
+## 8 工具清单初稿（第 3 轮）
+
+### 8.1 从 12 个"意图自带工具名"收敛到 9 个可落地工具
+
+`intent_taxonomy.yaml` 已声明 12 个工具名（二期刻意不入库、留给四期）。实测**只有 6 个有一期服务或表支撑**：
+
+| 意图 yaml 里的工具名 | 有一期服务/表？ | 四期处置 |
+|---|---|---|
+| `order_query` | 是（`order.get_order/list_orders`） | 落地 `query_order` |
+| `payment_query` | 是（`payment.list_payments/get_payment`） | 落地 `query_payment` |
+| `shipment_query` | 是（`fulfillment.list_shipments/get_shipment`） | 落地 `query_shipment` |
+| `after_sales_query` | 是（`aftersales.list_applications`） | 落地 `query_after_sales` |
+| `installation_query` | **否**（无表；只有 `orders.install_required/install_notes` 两列） | 降级为知识检索 + 转人工 |
+| `repair_query` | **否**（`06_保修维修` 全是文档） | 降级为知识检索 |
+| `subscription_query` | **否**（`08_云服务` 全是文档） | 降级为知识检索 |
+| `device_binding_query` | **否**（07 全是文档） | 降级为知识检索 |
+| `device_status_optional` | **否** | 不做 |
+| `security_audit` / `security_audit_optional` | **否** | 直接转人工（本就该 escalate） |
+| `ticket_query_optional` | **否** | 不做（三期 handoff 已覆盖） |
+
+再加两个 yaml 里没列、但一期有服务的：`query_product`（`catalog.search_products/get_public_product`）、`query_invoice`（`invoice.list_invoices`）。
+**结论：7 只读（含 1 个知识检索）+ 2 写 = 9 个。**
+
+### 8.2 工具清单
+
+| # | 工具名 | 类型 | 入参 | 权限门 | 核验 | 幂等 | 需确认 | 对应一期函数 |
+|---|---|---|---|---|---|---|---|---|
+| 1 | `query_product` | 只读 | `{keyword?, model_code?}` | 无（C 端在售） | 否 | 天然 | 否 | `catalog.search_products`、`catalog.get_public_product` |
+| 2 | `query_order` | 只读 | `{order_no}` | `tool:read` | **是** | 天然 | 否 | `order.get_order`（需 order_no→id 解析，见 §8.3） |
+| 3 | `query_shipment` | 只读 | `{order_no}` | `tool:read` | **是** | 天然 | 否 | `fulfillment.list_shipments` |
+| 4 | `query_payment` | 只读 | `{order_no}` | `tool:read` | **是** | 天然 | 否 | `payment.list_payments` |
+| 5 | `query_after_sales` | 只读 | `{order_no}` | `tool:read` | **是** | 天然 | 否 | `aftersales.list_applications` |
+| 6 | `query_invoice` | 只读 | `{order_no}` | `tool:read` | **是** | 天然 | 否 | `invoice.list_invoices` |
+| 7 | `search_knowledge` | 只读 | `{query, top_k?}` | 无 | 否 | 天然 | 否 | `knowledge_retrieval.search`（三期已有） |
+| 8 | `cancel_order` | **写** | `{order_no, reason}` | `tool:write:order` | **是** | `pending_action` 唯一键 | **是** | `order.cancel` |
+| 9 | `create_after_sales` | **写** | `{order_no, type, reason_code, order_item_id?, quantity?, description?}` | `tool:write:aftersales` | **是** | `pending_action` 唯一键 | **是（且标注不可撤销）** | `aftersales.create` |
+
+### 8.3 三个必须交代的缺口
+
+| # | 缺口 | 事实 | 处置 |
+|---|---|---|---|
+| G1 | **没有"按 order_no + actor 查订单"的函数** | 全库唯一按 `order_no` 查单的地方是 `assistant_handoff._order()`（无 customer 过滤，staff 视角） | 四期在服务层加薄封装 `resolve_order(db, actor, order_no)`，内部走 `select(Order).where(customer_id==actor.customer_id)`；**不改一期函数** |
+| G2 | **幂等只在`pending_action`层** | `order.cancel` 自带"已取消直接返回"的弱幂等；`aftersales.create` 无幂等键 | 写工具一律先落 `pending_action`（UNIQUE(conversation_id, action_key)），执行成功后记账；重放走回放 |
+| G3 | **工具执行必然二次事务** | `order.cancel` / `aftersales.create` 末尾都 `db.commit()` | 确认单先 commit（PROPOSED），执行时再 commit（EXECUTED）；**中间态可见**，失败可重试而不是"半截" |
+
+### 8.4 权限门设计（关键取舍）
+
+**客户侧不用权限码**：一期所有服务函数已按 `actor.party == CUSTOMER` → `customer_id` 过滤（`order.py:71-78`、`payment.py:23-31`、`aftersales.py:56-64`、`invoice.py:23-26`），"客户只能操作自己的单据"**由服务层天然保证**。四期只需保证一件事：**actor 必须来自 `conversation.user_id`，永不来自工具参数**。
+
+`tool:*` 权限码管的是**能力开关**（谁能开写工具、灰度放给哪些坐席/渠道），不是单据权限：
+
+| 权限码 | 语义 | 授予 |
+|---|---|---|
+| `tool:read` | 允许触发只读工具 | `AI_AGENT`（新增绑定） |
+| `tool:write:order` | 允许触发`cancel_order` | `AI_SUPERVISOR` |
+| `tool:write:aftersales` | 允许触发`create_after_sales` | `AI_SUPERVISOR` |
+| `tool:admin` | 维护工具注册表与开关 | `SYSTEM_ADMIN` |
+
+### 8.5 工具描述规范（让模型选对）
+
+| 规则 | 写法 |
+|---|---|
+| R1 | description 必须写**触发条件**而非功能：`"当用户给出订单号并询问订单状态/金额/进度时使用"`，不写 `"查询订单"` |
+| R2 | 必须写**何时不要用**：`"用户只问'怎么取消'且未给订单号时不要调用，先反问"` |
+| R3 | 参数 description 写**格式与来源**：`order_no: "形如 SO2026…；只在用户明确给出时填，禁止编造"` |
+| R4 | 只读工具一律 `strict: true` + `additionalProperties: false`，避免模型自由加字段 |
+| R5 | 写工具 description 末尾固定写 **"调用本工具只生成待确认动作，不直接改单"**（模型与审核双重保险） |
+
+反例（禁止）：`{"name":"query_order","description":"查询订单信息"}` —— 模型会拿它去答"怎么退款"。
+
+---
+
+## 9 累计待决
+
+| # | 问题 | 状态 |
+|---|---|---|
+| Q4 | chunk↔entity 映射方案（A 新表 / B 现算 / C metadata） | **未答** |
+| Q5 | 67 实体 / 105 关系是否"够用" | **未答** |
+| Q6 | 工具清单边界（9 个 / 7 个 / 11 个） | 本轮新提 |
