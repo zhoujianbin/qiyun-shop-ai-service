@@ -26,6 +26,23 @@ logger = logging.getLogger(__name__)
 
 KINDS = ("product", "accessory", "part", "fault", "action", "policy")
 
+# 政策编码的中文名：每条都能指到一份知识文档（只是翻译规则 id，不改规则本身）
+# ESC-P3-GENERAL 的 triggers 是"受理分类"，不是故障现象，导入时跳过
+PLACEHOLDER_TRIGGERS = {"general_question", "cosmetic_issue", "suggestion"}
+
+POLICY_LABELS = {
+    "ESC-P3-GENERAL": "P3 一般咨询（不升级）",           # escalation_matrix.yaml：P3/frontline_support
+    "RETURN-NO-REASON-7D": "七日无理由退货",           # 05_退换货与退款/七日无理由退货.md
+    "QUALITY-ISSUE-RETURN-15D": "质量问题退货（15 日内）",   # 05_退换货与退款/质量问题退换货.md
+    "QUALITY-ISSUE-EXCHANGE-30D": "质量问题换货（30 日内）",  # 同上
+    "REFUND-MERCHANT-PROCESS-3BD": "退款审核与 3 个工作日处理",  # 05_退换货与退款/退款处理与到账.md
+    "SHIPPING-FREE-99": "满 99 元免运费",              # 03_物流与履约/发货时效与运费.md
+    "LOGISTICS-STAGNANT-72H": "物流停滞 72 小时处理",    # 03_物流与履约/物流停滞丢件与拒收.md
+    "ADDRESS-CHANGE-AFTER-SHIP": "发货后改地址与物流拦截",  # 03_物流与履约/地址修改与物流拦截.md
+    "INSTALL-RESCHEDULE-4H": "安装改约需提前 4 小时",      # 04_安装与交付/服务范围与预约.md
+    "CLOUD-COOLING-OFF-7D": "云服务取消退款 7 天冷静期",   # 08_云服务与订阅/取消退款与冷静期.md
+}
+
 # 部件编码的中文名，来自 KB-WARRANTY-001《产品与部件保修矩阵》（只是翻译，不是新规则）
 PART_LABELS = {
     "lock_body_and_electronics": "锁体及电子部件",
@@ -539,22 +556,28 @@ def import_structured_rules(db: Session, actor: dict) -> dict:
 
     # 升级矩阵本身作为政策实体
     for rule_id, spec in (escalation.get("rules") or {}).items():
-        triggers_cn = [fault_display(str(t)) for t in (spec.get("triggers") or [])]
-        display = f"{spec.get('priority') or ''} 升级：{'/'.join(triggers_cn[:3]) or rule_id}".strip()
+        triggers_cn = [fault_display(str(t)) for t in (spec.get("triggers") or [])
+                       if str(t) not in PLACEHOLDER_TRIGGERS]
+        display = POLICY_LABELS.get(str(rule_id)) or (
+            f"{spec.get('priority') or ''} 升级：{'/'.join(triggers_cn[:3]) or rule_id}".strip())
         rule = _upsert_imported(db, code=str(rule_id), kind="policy",
                                 name=display,
                                 attrs={"policy_kind": "escalation", "priority": spec.get("priority"),
                                        "response_minutes": spec.get("response_minutes"),
                                        "prohibit": spec.get("prohibit") or []})
         for trigger in spec.get("triggers") or []:
+            if str(trigger) in PLACEHOLDER_TRIGGERS:
+                continue
             fault = _upsert_imported(db, code=str(trigger), kind="fault",
                                      name=fault_display(str(trigger)),
                                      attrs={"display_from": "escalation_aliases"})
             _upsert_relation_imported(db, fault, "ESCALATES_TO", rule)
 
     for rule_id, spec in (policy.get("rules") or {}).items():
-        _upsert_imported(db, code=str(rule_id), kind="policy", name=str(rule_id),
-                         attrs={"policy_kind": "policy", **(spec if isinstance(spec, dict) else {})})
+        _upsert_imported(db, code=str(rule_id), kind="policy",
+                         name=POLICY_LABELS.get(str(rule_id), str(rule_id)),
+                         attrs={"policy_kind": "policy",
+                                **(spec if isinstance(spec, dict) else {})})
 
     # 对话可触发的动作（与四期工具清单一一对应；语义由本仓库定义，不是业务规则）
     actions = {
@@ -583,7 +606,14 @@ def import_structured_rules(db: Session, actor: dict) -> dict:
                 db.add(Alias(tenant_id=settings.tenant_id, entity_id=fault.id, alias=str(word),
                              confidence="HIGH", status="APPROVED", source="import"))
 
+    # 清理历史上误当成故障导入的受理分类（幂等）
+    stale = db.execute(select(Entity).where(
+        Entity.tenant_id == settings.tenant_id, Entity.kind == "fault",
+        Entity.code.in_(PLACEHOLDER_TRIGGERS))).scalars().all()
+    for row in stale:
+        db.delete(row)
     db.flush()
+
     after_e = db.execute(select(func.count()).select_from(Entity).where(
         Entity.tenant_id == settings.tenant_id)).scalar_one()
     after_r = db.execute(select(func.count()).select_from(Relation).where(
