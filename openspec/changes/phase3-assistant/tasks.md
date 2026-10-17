@@ -38,13 +38,13 @@
 
 ## 4. 身份核验与转人工
 
-- [ ] 4.1 实现 `assistant_handoff.py::verify_identity`：订单号 + 收货手机后四位比对，写 `identity_verification` 与过期时间；验证：正确/错误用例各一
-- [ ] 4.2 实现会话级可见范围放宽（只读、30 分钟过期失效）+ **固定事实快照** `order_fact_snapshot`（订单号/状态/实付/下单时间/物流状态+运单号/售后进度，6 字段白名单）；验证：过期后按未核验处理；快照响应正则断言不含完整手机/地址/卡号
-- [ ] 4.3 实现失败计数与连续 3 次强制转人工；验证：第 3 次失败后核验被拒且生成 handoff
-- [ ] 4.4 实现统一失败话术（不可枚举）；验证：两种失败返回同一文案，且不含个人信息
-- [ ] 4.5 实现转人工 5 触发（`USER_REQUEST`/`HIGH_RISK_RULE`/`IDENTITY_FAILED`/`NO_HIT`/`MODEL_ERROR`）+ **认领制**状态机：认领置 `conversation.ai_paused=true`（AI 停止自动回答），关单必填 `summary` 并恢复 `ai_paused=false`；**不自动建售后工单**；验证：五类原因各一条，认领后提问不再触发模型，缺结论关单 422
-- [ ] 4.6 接审计与 outbox 事件（`ai.handoff.created` 等）；验证：`shared.outbox_event` 出现对应事件
-- [ ] 4.7 为核验与转人工写测试；验证：`python -m pytest -q tests/test_assistant_handoff.py`
+- [x] 4.1 实现 `assistant_handoff.py::verify_identity`：订单号 + 收货手机后四位比对，写 `identity_verification` 与过期时间；验证：正确/错误用例各一
+- [x] 4.2 实现会话级可见范围放宽（只读、30 分钟过期失效）+ **固定事实快照** `order_fact_snapshot`（订单号/状态/实付/下单时间/物流状态+运单号/售后进度，6 字段白名单）；验证：过期后按未核验处理；快照响应正则断言不含完整手机/地址/卡号
+- [x] 4.3 实现失败计数与连续 3 次强制转人工；验证：第 3 次失败后核验被拒且生成 handoff
+- [x] 4.4 实现统一失败话术（不可枚举）；验证：两种失败返回同一文案，且不含个人信息
+- [x] 4.5 实现转人工 5 触发（`USER_REQUEST`/`HIGH_RISK_RULE`/`IDENTITY_FAILED`/`NO_HIT`/`MODEL_ERROR`）+ **认领制**状态机：认领置 `conversation.ai_paused=true`（AI 停止自动回答），关单必填 `summary` 并恢复 `ai_paused=false`；**不自动建售后工单**；验证：五类原因各一条，认领后提问不再触发模型，缺结论关单 422
+- [x] 4.6 接审计与 outbox 事件（`ai.handoff.created` 等）；验证：`shared.outbox_event` 出现对应事件
+- [x] 4.7 为核验与转人工写测试；验证：`python -m pytest -q tests/test_assistant_handoff.py`
 
 ## 5. 前端与集成
 

@@ -16,7 +16,7 @@ from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user, request_permissions
+from app.api.deps import get_current_user, request_permissions, require
 from app.api.v1.common import actor_of
 from app.core.config import settings
 from app.core.db import get_db
@@ -25,10 +25,11 @@ from app.integrations import llm
 from app.models import AppUser
 from app.models.generated import Message
 from app.schemas.assistant import (
-    ConversationCreate, ConversationPage, ConversationView, MessagePage, StreamRequest,
+    AgentMessageRequest, ConversationCreate, ConversationPage, ConversationView, HandoffCloseRequest,
+    HandoffView, IdentityRequest, MessagePage, MessageView, StreamRequest,
 )
 from app.services import assistant_conversation as conversation_service
-from app.services import assistant_graph
+from app.services import assistant_graph, assistant_handoff
 from app.services import audit
 from app.services.common import now
 
@@ -303,3 +304,53 @@ def ConversationNotFound():
     from app.core.errors import NotFound
 
     return NotFound("消息不存在或不可见")
+
+# ---------------------------------------------------------------- 身份核验 / 转人工
+@router.post("/conversations/{conversation_id}/identity")
+def verify_identity(conversation_id: int, payload: IdentityRequest, request: Request,
+                    db: Session = Depends(get_db),
+                    user: AppUser = Depends(get_current_user)) -> dict:
+    actor = actor_of(request, user, db)
+    conversation = conversation_service.ensure_visible(
+        db, conversation_id, actor=actor, staff=_staff(request, db, user))
+    return assistant_handoff.verify_identity(
+        db, actor, conversation, order_no=payload.order_no, phone_tail=payload.phone_tail)
+
+
+@router.post("/conversations/{conversation_id}/handoff")
+def request_handoff(conversation_id: int, request: Request, db: Session = Depends(get_db),
+                    user: AppUser = Depends(get_current_user)) -> dict:
+    actor = actor_of(request, user, db)
+    conversation = conversation_service.ensure_visible(
+        db, conversation_id, actor=actor, staff=_staff(request, db, user))
+    return assistant_handoff.create_handoff(db, actor, conversation, reason="USER_REQUEST")
+
+
+@router.get("/handoffs", response_model=list[HandoffView])
+def list_handoffs(status: str | None = None, db: Session = Depends(get_db),
+                  user: AppUser = Depends(require("ai:handoff:read"))) -> list[dict]:
+    return assistant_handoff.list_handoffs(db, status=status)
+
+
+@router.post("/handoffs/{handoff_id}/claim", response_model=HandoffView)
+def claim_handoff(handoff_id: int, request: Request, db: Session = Depends(get_db),
+                  user: AppUser = Depends(require("ai:handoff:write"))) -> dict:
+    return assistant_handoff.claim_handoff(db, actor_of(request, user, db), handoff_id)
+
+
+@router.post("/handoffs/{handoff_id}/close", response_model=HandoffView)
+def close_handoff(handoff_id: int, payload: HandoffCloseRequest, request: Request,
+                  db: Session = Depends(get_db),
+                  user: AppUser = Depends(require("ai:handoff:write"))) -> dict:
+    return assistant_handoff.close_handoff(db, actor_of(request, user, db), handoff_id,
+                                           summary=payload.summary, back_to_ai=payload.back_to_ai)
+
+
+@router.post("/conversations/{conversation_id}/agent-messages", response_model=MessageView)
+def agent_message(conversation_id: int, payload: AgentMessageRequest, request: Request,
+                  db: Session = Depends(get_db),
+                  user: AppUser = Depends(require("ai:chat:write"))) -> dict:
+    conversation = conversation_service.ensure_visible(
+        db, conversation_id, actor=actor_of(request, user, db), staff=True)
+    return assistant_handoff.agent_message(
+        db, actor_of(request, user, db), conversation, payload.content)
