@@ -25,8 +25,8 @@ from app.integrations import llm
 from app.models import AppUser
 from app.models.generated import Message
 from app.schemas.assistant import (
-    AgentMessageRequest, ConversationCreate, ConversationPage, ConversationView, HandoffCloseRequest,
-    HandoffView, IdentityRequest, MessagePage, MessageView, StreamRequest,
+    AgentMessageRequest, ConversationCreate, ConversationPage, ConversationView, FeedbackRequest,
+    HandoffCloseRequest, HandoffView, IdentityRequest, MessagePage, MessageView, StreamRequest,
 )
 from app.services import assistant_conversation as conversation_service
 from app.services import assistant_graph, assistant_handoff
@@ -354,3 +354,25 @@ def agent_message(conversation_id: int, payload: AgentMessageRequest, request: R
         db, conversation_id, actor=actor_of(request, user, db), staff=True)
     return assistant_handoff.agent_message(
         db, actor_of(request, user, db), conversation, payload.content)
+
+@router.post("/messages/{message_id}/feedback")
+def submit_feedback(message_id: int, payload: FeedbackRequest, request: Request,
+                    db: Session = Depends(get_db),
+                    user: AppUser = Depends(get_current_user)) -> dict:
+    from app.models.generated import Message
+    from app.services.common import now
+
+    message = db.get(Message, message_id)
+    if message is None or message.tenant_id != settings.tenant_id:
+        raise ConversationNotFound()
+    conversation = conversation_service.ensure_visible(
+        db, message.conversation_id, actor=actor_of(request, user, db), staff=_staff(request, db, user))
+    meta = dict(message.metadata_json or {})
+    meta["feedback"] = {"value": payload.value, "reason": payload.reason,
+                        "at": now().isoformat(), "user_id": user.id}
+    message.metadata_json = meta
+    db.add(message)
+    audit.record(db, {"id": user.id, "party": user.party}, "ai.message.feedback",
+                 "assistant.message", message.id, after=meta["feedback"])
+    db.commit()
+    return meta["feedback"]

@@ -4171,6 +4171,452 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/ai/conversations:
+    post:
+      tags:
+      - assistant
+      summary: Create Conversation
+      operationId: create_conversation_api_v1_ai_conversations_post
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConversationCreate'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversationView'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    get:
+      tags:
+      - assistant
+      summary: List Conversations
+      operationId: list_conversations_api_v1_ai_conversations_get
+      parameters:
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          default: 1
+          title: Page
+      - name: page_size
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          default: 20
+          title: Page Size
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversationPage'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/ai/conversations/{conversation_id}:
+    get:
+      tags:
+      - assistant
+      summary: Get Conversation
+      operationId: get_conversation_api_v1_ai_conversations__conversation_id__get
+      parameters:
+      - name: conversation_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Conversation Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversationView'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/ai/conversations/{conversation_id}/close:
+    post:
+      tags:
+      - assistant
+      summary: Close Conversation
+      operationId: close_conversation_api_v1_ai_conversations__conversation_id__close_post
+      parameters:
+      - name: conversation_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Conversation Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversationView'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/ai/conversations/{conversation_id}/messages:
+    get:
+      tags:
+      - assistant
+      summary: List Messages
+      operationId: list_messages_api_v1_ai_conversations__conversation_id__messages_get
+      parameters:
+      - name: conversation_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Conversation Id
+      - name: after_seq
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: After Seq
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          default: 1
+          title: Page
+      - name: page_size
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          default: 20
+          title: Page Size
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessagePage'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/ai/conversations/{conversation_id}/messages:stream:
+    post:
+      tags:
+      - assistant
+      summary: Stream Message
+      operationId: stream_message_api_v1_ai_conversations__conversation_id__messages_stream_post
+      parameters:
+      - name: conversation_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Conversation Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StreamRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/ai/messages/{message_id}/trace:
+    get:
+      tags:
+      - assistant
+      summary: Get Message Trace
+      operationId: get_message_trace_api_v1_ai_messages__message_id__trace_get
+      parameters:
+      - name: message_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Message Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  additionalProperties: true
+                title: Response Get Message Trace Api V1 Ai Messages  Message Id  Trace
+                  Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/ai/conversations/{conversation_id}/identity:
+    post:
+      tags:
+      - assistant
+      summary: Verify Identity
+      operationId: verify_identity_api_v1_ai_conversations__conversation_id__identity_post
+      parameters:
+      - name: conversation_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Conversation Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IdentityRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Verify Identity Api V1 Ai Conversations  Conversation
+                  Id  Identity Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/ai/conversations/{conversation_id}/handoff:
+    post:
+      tags:
+      - assistant
+      summary: Request Handoff
+      operationId: request_handoff_api_v1_ai_conversations__conversation_id__handoff_post
+      parameters:
+      - name: conversation_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Conversation Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Request Handoff Api V1 Ai Conversations  Conversation
+                  Id  Handoff Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/ai/handoffs:
+    get:
+      tags:
+      - assistant
+      summary: List Handoffs
+      operationId: list_handoffs_api_v1_ai_handoffs_get
+      parameters:
+      - name: status
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Status
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/HandoffView'
+                title: Response List Handoffs Api V1 Ai Handoffs Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/ai/handoffs/{handoff_id}/claim:
+    post:
+      tags:
+      - assistant
+      summary: Claim Handoff
+      operationId: claim_handoff_api_v1_ai_handoffs__handoff_id__claim_post
+      parameters:
+      - name: handoff_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Handoff Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HandoffView'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/ai/handoffs/{handoff_id}/close:
+    post:
+      tags:
+      - assistant
+      summary: Close Handoff
+      operationId: close_handoff_api_v1_ai_handoffs__handoff_id__close_post
+      parameters:
+      - name: handoff_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Handoff Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HandoffCloseRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HandoffView'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/ai/conversations/{conversation_id}/agent-messages:
+    post:
+      tags:
+      - assistant
+      summary: Agent Message
+      operationId: agent_message_api_v1_ai_conversations__conversation_id__agent_messages_post
+      parameters:
+      - name: conversation_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Conversation Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentMessageRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageView'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/ai/messages/{message_id}/feedback:
+    post:
+      tags:
+      - assistant
+      summary: Submit Feedback
+      operationId: submit_feedback_api_v1_ai_messages__message_id__feedback_post
+      parameters:
+      - name: message_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Message Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FeedbackRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Submit Feedback Api V1 Ai Messages  Message Id  Feedback
+                  Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
 components:
   schemas:
     AddressCreate:
@@ -4811,6 +5257,17 @@ components:
       - created_at
       - updated_at
       title: AfterSalesView
+    AgentMessageRequest:
+      properties:
+        content:
+          type: string
+          maxLength: 2000
+          minLength: 1
+          title: Content
+      type: object
+      required:
+      - content
+      title: AgentMessageRequest
     ApplicationCreate:
       properties:
         order_id:
@@ -5729,6 +6186,84 @@ components:
           title: Remark
       type: object
       title: CompleteRequest
+    ConversationCreate:
+      properties:
+        channel_account_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Channel Account Id
+      type: object
+      title: ConversationCreate
+    ConversationPage:
+      properties:
+        page:
+          type: integer
+          title: Page
+        page_size:
+          type: integer
+          title: Page Size
+        total:
+          type: integer
+          title: Total
+        items:
+          items:
+            $ref: '#/components/schemas/ConversationView'
+          type: array
+          title: Items
+        meta:
+          additionalProperties: true
+          type: object
+          title: Meta
+      type: object
+      required:
+      - page
+      - page_size
+      - total
+      - items
+      - meta
+      title: ConversationPage
+    ConversationView:
+      properties:
+        id:
+          type: integer
+          title: Id
+        conversation_no:
+          type: string
+          title: Conversation No
+        status:
+          type: string
+          title: Status
+        ai_paused:
+          type: boolean
+          title: Ai Paused
+          default: false
+        message_count:
+          type: integer
+          title: Message Count
+          default: 0
+        title:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Title
+        last_message_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Last Message At
+        created_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Created At
+      additionalProperties: true
+      type: object
+      required:
+      - id
+      - conversation_no
+      - status
+      title: ConversationView
     CurrentUser:
       properties:
         id:
@@ -6343,6 +6878,22 @@ components:
       - category
       - status
       title: DocumentView
+    FeedbackRequest:
+      properties:
+        value:
+          type: string
+          pattern: ^(LIKE|DISLIKE)$
+          title: Value
+        reason:
+          anyOf:
+          - type: string
+            maxLength: 200
+          - type: 'null'
+          title: Reason
+      type: object
+      required:
+      - value
+      title: FeedbackRequest
     GuestRequest:
       properties:
         display_name:
@@ -6361,6 +6912,70 @@ components:
           title: Detail
       type: object
       title: HTTPValidationError
+    HandoffCloseRequest:
+      properties:
+        summary:
+          type: string
+          maxLength: 2000
+          minLength: 1
+          title: Summary
+        back_to_ai:
+          type: boolean
+          title: Back To Ai
+          default: false
+      type: object
+      required:
+      - summary
+      title: HandoffCloseRequest
+    HandoffView:
+      properties:
+        id:
+          type: integer
+          title: Id
+        conversation_id:
+          type: integer
+          title: Conversation Id
+        reason:
+          type: string
+          title: Reason
+        status:
+          type: string
+          title: Status
+        assignee_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Assignee Id
+        summary:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Summary
+      additionalProperties: true
+      type: object
+      required:
+      - id
+      - conversation_id
+      - reason
+      - status
+      title: HandoffView
+    IdentityRequest:
+      properties:
+        order_no:
+          type: string
+          maxLength: 32
+          minLength: 1
+          title: Order No
+        phone_tail:
+          type: string
+          maxLength: 4
+          minLength: 4
+          title: Phone Tail
+      type: object
+      required:
+      - order_no
+      - phone_tail
+      title: IdentityRequest
     ImportErrorItem:
       properties:
         file:
@@ -7099,6 +7714,22 @@ components:
       - shipment_no
       - status
       title: LogisticsCallback
+    MessagePage:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/MessageView'
+          type: array
+          title: Items
+        meta:
+          additionalProperties: true
+          type: object
+          title: Meta
+      type: object
+      required:
+      - items
+      - meta
+      title: MessagePage
     MessageRequest:
       properties:
         content:
@@ -7124,6 +7755,37 @@ components:
       required:
       - content
       title: MessageRequest
+    MessageView:
+      properties:
+        id:
+          type: integer
+          title: Id
+        seq:
+          type: integer
+          title: Seq
+        role:
+          type: string
+          title: Role
+        content:
+          type: string
+          title: Content
+        status:
+          type: string
+          title: Status
+        created_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Created At
+      additionalProperties: true
+      type: object
+      required:
+      - id
+      - seq
+      - role
+      - content
+      - status
+      title: MessageView
     MockSucceedView:
       properties:
         payment:
@@ -10369,6 +11031,27 @@ components:
       - change_type
       - qty_delta
       title: StockAdjustResult
+    StreamRequest:
+      properties:
+        content:
+          type: string
+          maxLength: 2000
+          minLength: 1
+          title: Content
+        client_msg_id:
+          anyOf:
+          - type: string
+            maxLength: 64
+          - type: 'null'
+          title: Client Msg Id
+        identity_level:
+          type: string
+          title: Identity Level
+          default: public
+      type: object
+      required:
+      - content
+      title: StreamRequest
     TokenBundle:
       properties:
         access_token:

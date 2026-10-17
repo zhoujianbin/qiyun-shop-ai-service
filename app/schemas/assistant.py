@@ -68,6 +68,11 @@ class AgentMessageRequest(BaseModel):
     content: str = Field(min_length=1, max_length=2000)
 
 
+class FeedbackRequest(BaseModel):
+    value: str = Field(pattern="^(LIKE|DISLIKE)$")
+    reason: str | None = Field(default=None, max_length=200)
+
+
 class StreamRequest(BaseModel):
     content: str = Field(min_length=1, max_length=2000)
     client_msg_id: str | None = Field(default=None, max_length=64)
