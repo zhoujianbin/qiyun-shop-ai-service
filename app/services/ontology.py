@@ -419,6 +419,67 @@ def _fuzzy_entity(db: Session, question: str) -> Entity | None:
     return winners[0] if len(winners) == 1 else None
 
 
+# ---------------------------------------------------------------- 向量兜底（仅排序）
+VECTOR_MIN_SCORE = 0.52      # 实测：0.52 + 0.05 间距能收下"指纹录不进去/扫地机不回充"，且不误收 */
+
+VECTOR_MIN_MARGIN = 0.05
+_ENTITY_VECTOR_CACHE: dict[str, object] = {"key": None, "items": []}
+
+
+def _entity_vectors(db: Session) -> list[tuple[Entity, list[float]]]:
+    """实体向量缓存：按 (实体数, 最大 updated_at) 判活，进程内复用。
+
+    只用于排序兜底，错了最多是顺序微调，不会改变可见范围。
+    """
+    entities = db.execute(select(Entity).where(
+        Entity.tenant_id == settings.tenant_id, Entity.status == "APPROVED")).scalars().all()
+    if not entities:
+        return []
+    latest = max((item.updated_at for item in entities if item.updated_at), default=None)
+    key = (len(entities), latest)
+    if _ENTITY_VECTOR_CACHE["key"] == key:
+        return _ENTITY_VECTOR_CACHE["items"]  # type: ignore[return-value]
+    try:
+        from app.integrations import embedding
+
+        aliases: dict[int, list[str]] = {}
+        for alias, entity_id in db.execute(select(Alias.alias, Alias.entity_id).where(
+                Alias.status == "APPROVED")).fetchall():
+            aliases.setdefault(entity_id, []).append(alias)
+        docs = [f"{item.name} {' '.join(aliases.get(item.id, [])[:4])} {item.code}".strip()
+                for item in entities]
+        vectors = embedding.encode_documents(docs)
+        items = list(zip(entities, vectors))
+        _ENTITY_VECTOR_CACHE.update({"key": key, "items": items})
+        return items
+    except Exception as exc:  # noqa: BLE001 - 向量兜底不可用就跳过
+        logger.warning("实体向量缓存构建失败，跳过向量兜底：%s", exc)
+        return []
+
+
+def _vector_entity(db: Session, question: str) -> Entity | None:
+    """第三层兜底：唯一最优、分数 ≥0.55 且与次优差 ≥0.05 才采纳。"""
+    items = _entity_vectors(db)
+    if not items:
+        return None
+    try:
+        from app.integrations import embedding
+
+        vector = embedding.encode_query(question)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("问题向量化失败，跳过向量兜底：%s", exc)
+        return None
+    scored = sorted(((sum(a * b for a, b in zip(vector, item_vector)), entity)
+                     for entity, item_vector in items), key=lambda pair: pair[0], reverse=True)
+    if len(scored) < 2:
+        return None
+    best_score, best_entity = scored[0]
+    second_score = scored[1][0]
+    if best_score < VECTOR_MIN_SCORE or (best_score - second_score) < VECTOR_MIN_MARGIN:
+        return None
+    return best_entity
+
+
 def _boost_products(db: Session, question: str) -> list[Entity]:
     """产品名的宽松命中：只用于排序加权，绝不参与过滤。"""
     products = db.execute(select(Entity).where(
@@ -485,6 +546,12 @@ def normalize_question(db: Session, question: str, *, max_entities: int = 3) -> 
                         "name": fuzzy.name, "matched": fuzzy.name, "method": "fuzzy"}]
             method = "fuzzy"
     boost = _boost_products(db, text_value)
+    boost_codes = {item.code for item in boost}
+    # 第三层兜底：向量相似度只加进 boost（仅排序），不参与过滤也不改 product_scope
+    vector_hit = _vector_entity(db, text_value)
+    if vector_hit is not None and vector_hit.code not in boost_codes:
+        boost.append(vector_hit)
+        boost_codes.add(vector_hit.code)
     boost_payload = [{"id": item.id, "code": item.code, "name": item.name} for item in boost]
     if not matched:
         return {"entities": [], "entity_ids": [], "product_scope": None,
@@ -516,14 +583,17 @@ def normalize_question(db: Session, question: str, *, max_entities: int = 3) -> 
     resolved = [(rows[item["id"]].kind, _product_scope_of(rows[item["id"]], tags, parent_scopes))
                 for item in matched if item["id"] in rows]
     product_scope = None
-    for kind in ("product", "fault", "part", "accessory"):
-        if not any(item_kind == kind for item_kind, _ in resolved):
-            continue
-        product_scope = next((scope for item_kind, scope in resolved if item_kind == kind and scope), None)
-        break
-    # 产品名宽松命中与部件推导出的范围冲突时，以用户明说的产品为准（如"门锁电池"）
-    if boost_payload and product_scope not in {item["code"] for item in boost_payload}:
-        product_scope = boost_payload[0]["code"]
+    if method == "exact":
+        for kind in ("product", "fault", "part", "accessory"):
+            if not any(item_kind == kind for item_kind, _ in resolved):
+                continue
+            product_scope = next((scope for item_kind, scope in resolved
+                                  if item_kind == kind and scope), None)
+            break
+        # 只有"产品类"的宽松命中才能纠正范围（如"门锁电池"）；其它实体一律不许改写 scope
+        product_boosts = [item for item in boost if item.kind == "product"]
+        if product_boosts and product_scope not in {item.code for item in product_boosts}:
+            product_scope = product_boosts[0].code
     return {"entities": matched, "entity_ids": ids, "product_scope": product_scope,
             "method": method, "boost_entities": boost_payload}
 
