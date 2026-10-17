@@ -5,6 +5,7 @@ import Drawer from 'antd/es/drawer';
 import Input from 'antd/es/input';
 import Select from 'antd/es/select';
 import Space from 'antd/es/space';
+import Segmented from 'antd/es/segmented';
 import Table from 'antd/es/table';
 import Tag from 'antd/es/tag';
 import Typography from 'antd/es/typography';
@@ -15,7 +16,8 @@ import { errorMessage } from '@/api/errors';
 import { knowledgeApi } from '@/api/endpoints/knowledge';
 import { queryClient } from '@/app/providers';
 import { PageHeader } from '@/components/common/PageHeader';
-import type { OntologyEntity, OntologyGraph } from '@/types/knowledge';
+import OntologyGraphView from '@/components/knowledge/OntologyGraph';
+import type { OntologyEntity, OntologyGraph, OntologyRelation } from '@/types/knowledge';
 
 const KIND_LABEL: Record<string, string> = {
   product: '产品', accessory: '配件', part: '部件', fault: '故障', action: '动作', policy: '政策',
@@ -30,9 +32,27 @@ export default function OntologyPage() {
   const [status, setStatus] = useState<string | undefined>();
   const [keyword, setKeyword] = useState('');
   const [selected, setSelected] = useState<number[]>([]);
+  const [view, setView] = useState<'list' | 'graph'>('list');
   const [graph, setGraph] = useState<OntologyGraph | null>(null);
   const [graphFor, setGraphFor] = useState<OntologyEntity | null>(null);
   const [error, setError] = useState('');
+
+  const graphData = useQuery({
+    queryKey: ['ontology', 'graph-data', kind, status, keyword],
+    queryFn: async () => {
+      const [entityPage, relationPage] = await Promise.all([
+        knowledgeApi.ontologyEntities({
+          kind, status, keyword: keyword || undefined, page: 1, page_size: 100,
+        }),
+        knowledgeApi.ontologyRelations({ page: 1, page_size: 200 }),
+      ]);
+      return {
+        entities: entityPage.items as OntologyEntity[],
+        relations: relationPage.items as OntologyRelation[],
+      };
+    },
+    enabled: view === 'graph',
+  });
 
   const entities = useQuery({
     queryKey: ['ontology', 'entities', kind, status, keyword],
@@ -110,6 +130,11 @@ export default function OntologyPage() {
       {error ? <Typography.Text type="danger">{error}</Typography.Text> : null}
       <Card size="small" style={{ marginBottom: 12 }}>
         <Space wrap>
+          <Segmented
+            value={view}
+            onChange={(value) => setView(value as 'list' | 'graph')}
+            options={[{ label: '列表', value: 'list' }, { label: '图谱', value: 'graph' }]}
+          />
           <Select
             allowClear
             placeholder="类型"
@@ -137,18 +162,32 @@ export default function OntologyPage() {
           </Typography.Text>
         </Space>
       </Card>
-      <Table
-        rowKey="id"
-        size="small"
-        loading={entities.isLoading}
-        columns={columns}
-        dataSource={rows}
-        rowSelection={{
-          selectedRowKeys: selected,
-          onChange: (keys) => setSelected(keys as number[]),
-        }}
-        pagination={false}
-      />
+      {view === 'graph' ? (
+        <Card size="small" loading={graphData.isLoading}>
+          <OntologyGraphView
+            entities={graphData.data?.entities ?? []}
+            relations={graphData.data?.relations ?? []}
+            onSelect={(entity) => {
+              setGraphFor(entity);
+              setGraph(null);
+              loadGraph.mutate(entity);
+            }}
+          />
+        </Card>
+      ) : (
+        <Table
+          rowKey="id"
+          size="small"
+          loading={entities.isLoading}
+          columns={columns}
+          dataSource={rows}
+          rowSelection={{
+            selectedRowKeys: selected,
+            onChange: (keys) => setSelected(keys as number[]),
+          }}
+          pagination={false}
+        />
+      )}
       <Drawer
         open={graphFor !== null}
         width={520}
