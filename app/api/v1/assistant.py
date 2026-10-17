@@ -168,7 +168,8 @@ def stream_message(conversation_id: int, payload: StreamRequest, request: Reques
     history = conversation_service.context_messages(db, conversation_id)
     started = time.monotonic()
     state = assistant_graph.run(db, content, actor=actor, history=history[:-1],
-                                identity_level=payload.identity_level)
+                                identity_level=payload.identity_level,
+                                conversation_id=conversation_id)
 
     # 自动转人工：高风险规则命中 / 同一问题第二次仍无命中
     if state.guard_hints:

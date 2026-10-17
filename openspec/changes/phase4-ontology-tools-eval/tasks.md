@@ -36,11 +36,11 @@
 
 ## 5 工具注册表与只读工具
 
-- [ ] 5.1 `app/services/tool_registry.py`：9 个工具定义（沿用 `ToolSpec`），补 `requires_confirm`，每个 `description` 含"何时不要用"，写工具含"只生成待确认动作"；验证：`D1`、`D2`
-- [ ] 5.2 参数校验层：`additionalProperties:false` + 必填 + 类型；校验失败不调一期函数；验证：`D3`
-- [ ] 5.3 `resolve_order(db, actor, order_no)`（新薄封装，带 `customer_id` 过滤，**不改一期函数**）；验证：`D6`
-- [ ] 5.4 六个只读工具接一期服务（`catalog.search_products`/`order.get_order`/`fulfillment.list_shipments`/`payment.list_payments`/`aftersales.list_applications`/`invoice.list_invoices`）；验证：`D5`
-- [ ] 5.5 工具调度节点 `tool_loop`：最多 3 次；只读失败按 §5.7 分级；每次调用写 `tool_call`（args 脱敏）；验证：`D7`、`G5`、`G6`
+- [x] 5.1 `app/services/tool_registry.py`：9 个工具定义（沿用 `ToolSpec`），补 `requires_confirm`，每个 `description` 含"何时不要用"，写工具含"只生成待确认动作"；验证：`D1`、`D2`
+- [x] 5.2 参数校验层：`additionalProperties:false` + 必填 + 类型；校验失败不调一期函数；验证：`D3`
+- [x] 5.3 `resolve_order(db, actor, order_no)`（新薄封装，带 `customer_id` 过滤，**不改一期函数**）；验证：`D6`
+- [x] 5.4 六个只读工具接一期服务（`catalog.search_products`/`order.get_order`/`fulfillment.list_shipments`/`payment.list_payments`/`aftersales.list_applications`/`invoice.list_invoices`）；验证：`D5`
+- [x] 5.5 工具调度节点 `tool_loop`：最多 3 次；只读失败按 §5.7 分级；每次调用写 `tool_call`（args 脱敏）；验证：`D7`、`G5`、`G6`
 
 ## 6 写操作与确认
 
@@ -53,7 +53,7 @@
 
 ## 7 核验门禁与 F21
 
-- [ ] 7.1 工具节点前置检查 `active_verification(conversation_id)` + `order_no` 精确匹配；验证：`F1`、`F2`、`F3`
+- [x] 7.1 工具节点前置检查 `active_verification(conversation_id)` + `order_no` 精确匹配；验证：`F1`、`F2`、`F3`
 - [ ] 7.2 写工具在 confirm 时再校验 `expires_at`；验证：`F3` + 过期写拒绝
 - [ ] 7.3 **F21 修复**：`identity_level` 由服务端推导（VERIFIED→customer / 员工权限→agent / 否则 public），忽略客户端入参；验证：`F4`（一票否决）、`F5`
 - [ ] 7.4 3 次失败锁 → `IDENTITY_FAILED` 转人工沿用；验证：`F6`
