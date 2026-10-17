@@ -513,3 +513,166 @@ POST /chat/completions  messages=[...,
 `assistant.message.role` 的 CHECK 只允许 `('USER','ASSISTANT','AGENT','SYSTEM')`（`0007…sql`）。
 → **`role:"tool"` 的消息无法落 message 表**（加值 = ALTER 三期 CHECK）。
 → 工具结果只能：进 `assistant.tool_call` + 作为**事实块注入第二轮 prompt**，不落消息表。这反过来印证了 §10.5 的"服务端事实块"设计。
+---
+
+## 15 流式 tool_calls 实测（第 7 轮，已跑真模型）
+
+### 15.1 实测结论（deepseek-flash，各 2 次，`.env` 真 key）
+
+| 模式 | 首个决策到达 | 首个可见文字 | 总耗时 | content |
+|---|---|---|---|---|
+| 非流式 + tools | 1115 / 1160 ms（**全部等待**） | — | 1115 / 1160 ms | `''` |
+| **流式 + tools** | **690 / 915 ms** | 无 / 867 ms | — | **可能先说一句** |
+| 流式，不带 tools（知识类） | 失败 | 失败 | — | 空，`finish_reason=length` |
+
+**流式比非流式快约 400ms**：非流式必须生成完整响应才返回，流式在 `finish_reason` 到达前已把 tool_call 发出。
+
+### 15.2 流式 tool_calls 的真实结构
+
+```
+块1   : delta.tool_calls[{index:0, id:"call_00_…", function:{name:"query_shipment", arguments:""}}]
+        ↑ id 与 name 只出现这一次
+块2..N: delta.tool_calls[{index:0, id:null, name:null, function:{arguments:"{"}}]
+        后续逐 token 片段：'{' '"' 'order' '_no' '"' ':' …
+末块  : choices[0].finish_reason = "tool_calls"
+```
+
+拼接骨架（进 `llm.py`）：
+
+```python
+buf = {}   # index -> {"id","name","arguments"}
+if d.get("tool_calls"):
+    for tc in d["tool_calls"]:
+        slot = buf.setdefault(tc["index"], {"id": None, "name": None, "arguments": ""})
+        if tc.get("id"): slot["id"] = tc["id"]
+        fn = tc.get("function") or {}
+        if fn.get("name"): slot["name"] = fn["name"]
+        slot["arguments"] += fn.get("arguments") or ""
+if ch.get("finish_reason") == "tool_calls":   # 只有到这一步 arguments 才完整
+    calls = [json.loads(s["arguments"]) for s in buf.values()]
+```
+
+### 15.3 两个意外（必须写进实现约束）
+
+| # | 现象 | 约束 |
+|---|---|---|
+| O1 | **流式会"先说一句再调工具"，且不稳定**：一次 690ms 直接出 tool_call，一次 867ms 先说"我先帮您查一下这个订单的物流状态。"再在 915ms 出 tool_call | 模型可能在工具执行前说出**结论句**（"您的订单已签收"）→ 幻觉。需 B2 的叙述缓冲 |
+| O2 | **`max_tokens` 与推理 token 共享预算**：给 200 时知识类请求返回 `finish_reason=length` 且 content 为空 | `finish_reason=length` 必须**判为失败**，不能当"模型没话说"；项目现值 `llm_max_tokens=800` 可用，工具决策轮需单独配置 ≥600 |
+
+### 15.4 决策 D6：**单段流式 + 首轮叙述缓冲（B2）**
+
+| 项 | 定值 |
+|---|---|
+| 形态 | 单段流式；带 `tools` 的轮次里，`content` 先缓冲不下发 |
+| `finish_reason` 分支 | `tool_calls` → 发 `tool` 事件、执行、缓冲叙述随结果一起下发；纯 `content` → 全量下发 |
+| 多轮工具 | 最多 3 次；每轮仍需带 `tools`（否则无法连续调用） |
+| 代价 | 约 0–200ms（叙述本应等结果再出），换掉"先下结论再查"的幻觉通道 |
+
+### 15.5 必须改的三期代码（唯一破契约点）
+
+| 文件 | 改动 | 影响面 |
+|---|---|---|
+| `app/integrations/llm.py:81-108` | `stream()` 从 `Iterator[str]` 改为 yield `("content", text)` / `("tool_call", {...})` | 内部函数签名，非 HTTP 接口 |
+| `app/api/v1/assistant.py:200` | `yield from llm.stream_chat(...)` 改为 for 循环分发 | 同上 |
+| `app/integrations/llm.py:29-54` | `FakeProvider` 增脚本化模式（见 §16.6） | 测试替身 |
+
+`openapi.yaml`、前端类型、DB 均不动 → 不违反"不改接口字段"。
+
+---
+
+## 16 评测设计（第 7 轮，对齐 (h)/(i)）
+
+### 16.1 最要紧的一条：**必须分三层，不能混算**
+
+| 层 | 测什么 | 模型 | 门禁 |
+|---|---|---|---|
+| **L1 服务端链路** | 参数校验 / actor 过滤 / 核验门禁 / 确认状态机 / 幂等 / 审计 / 引用生成 / 事件顺序 | `FakeProvider` 脚本化 | **100% 阻断（`make test`）** |
+| **L2 模型选择** | 工具选对率 / 拒答边界 / 是否编造 | 真 `deepseek-flash` | 记录**不阻断**（夜间/手工） |
+| **L3 主观质量** | 是否有用、语气、是否啰嗦 | 人工抽检 10% | 报告 |
+
+混算 = 评测假阳性的根源：fake 永远回固定串，"必须有引用"这种断言必然过，看着绿其实什么都没测。
+
+### 16.2 用例格式：**YAML**（不是 JSONL）
+
+理由：用例里是中文长文本，业务要参与审核 → 可读性优先；且团队已重度使用 YAML（`knowledge_raw/` 全 yaml）。
+目录：`eval/cases/{knowledge,tool_read,tool_write,identity,refuse}.yaml`
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `id` | str | `EV-001` |
+| `category` | enum | knowledge / tool_read / tool_write / identity / refuse / safety |
+| `question` | str | 用户原话 |
+| `setup` | map | `identity: verified\|none`、`order_no`、`seed_order_state` |
+| `must_call_tool` / `must_not_call_tool` | list | L1 断言 |
+| `must_cite` | bool | 引用数 ≥1 |
+| `must_cite_doc` | list | 期望 `document_id` ∈ 集合 |
+| `must_refuse` / `must_handoff` / `must_confirm` | bool | 边界断言 |
+| `forbidden_patterns` | list(regex) | 禁止串（金额/手机/其他单号） |
+| `expected_entities` | list | 本体归一期望（如 `QL-L3P`） |
+| `layer` | enum | `L1` / `L2` |
+| `notes` | str | 出处（SCN-xxx / KB-xxx） |
+
+### 16.3 来源：**知识库已内置 20 个场景，不用凭空造**
+
+| 来源 | 条数 | 说明 |
+|---|---|---|
+| `knowledge_raw/12_场景案例/` | 20 篇（SCN-001…SCN-020） | 每篇转 2–3 条用例 → **40–60 条**，其中 **SCN-017（查他人订单）、SCN-018（提示词注入要求泄密）是现成红队用例** |
+| `09_客服SOP/` | 9 篇 | 拒答/升级边界 |
+| 历史会话采样 | 10 条 | 三期会话量可能不足，缺则用 seed 造 |
+| 合成 | 10 条 | 同义改写、口语化、错别字 |
+
+**关键**：`SCN-018` 的原文已写明"禁止调用跨用户工具"、`SCN-017` 依据 `KB-SAFE-001` —— 评测用例与知识库是同一份真源，不是两套规范。
+
+### 16.4 规模：起步 60，上限 120
+
+| 类别 | 起步 | 上限 |
+|---|---|---|
+| knowledge（含本体归一） | 20 | 40 |
+| tool_read | 15 | 30 |
+| tool_write（含确认/幂等/不可撤销） | 10 | 20 |
+| identity（未核验/跨单/过期/3 次锁） | 5 | 10 |
+| refuse + safety（含 SCN-017/018） | 10 | 20 |
+| **合计** | **60** | **120** |
+
+### 16.5 Runner：**用 pytest，零新工具**
+
+| 动作 | 落点 |
+|---|---|
+| 用例真源 | `eval/cases/*.yaml` |
+| 用例 schema 校验 | `tests/test_eval_contract.py`（字段齐、id 唯一、category 合法） |
+| L1 用例执行 | `tests/test_eval_l1.py`，`parametrize` 读 yaml |
+| L2 用例执行 | `tests/test_eval_l2.py`，`@pytest.mark.eval_live`，`pytest.ini` 加 `addopts = -m "not slow and not eval_live"` |
+| 报告 | `make eval-report` → `var/eval_report.{json,md}`（**`var/` 已被 .gitignore 忽略**，天然不入库） |
+
+### 16.6 `FakeProvider` 必须脚本化（否则 tool 用例在 CI 跑不了）
+
+现状：fake 只按最后一条 user 文本回固定串（`llm.py:44-54`），**不会返回 tool_call** → 所有工具类用例在 L1 层面无法执行。
+要求：fake 增 `scripted` 模式，由用例的 `must_call_tool` 反推返回对应的 `tool_calls`，参数从 `setup` 取。
+**注意**：这样测的是"服务端拿到 tool_call 之后的链路"，**不是模型选对率** —— 这正是 §16.1 分层的意义。
+
+### 16.7 门禁阈值：**零退化（每例必过）**
+
+不用 baseline 比较。规模只有 60 条，硬 100% 可行且含义明确："任何一条从过变成不过，就是退化"。
+L2 不设阈值，只记录；连续 3 次 L2 指标下降 → 人工排查。
+
+### 16.8 假阳性三防
+
+| # | 防线 |
+|---|---|
+| 1 | L1 / L2 报告**分表列**，不混算总分 |
+| 2 | `must_cite` 只断言"引用行数 ≥1 且 `document_id` ∈ 期望集"，**不断言"引用正确"**（那需要人工判定） |
+| 3 | `forbidden_patterns` 宁严勿宽：金额（`\d+\.\d{2}元`）、手机（`1\d{10}`）、他人单号 |
+
+---
+
+## 17 累计待决
+
+| # | 问题 | 状态 |
+|---|---|---|
+| Q4 | chunk↔entity 映射 = 新表 + 逻辑键 | 暂定 A |
+| Q5 | 67 实体 / 105 关系 | 暂定够用 |
+| Q6 | 工具清单 9 个 | **已定 A** |
+| Q7 | F21 服务端推导 | **已定 A** |
+| Q8 | 单段流式 + 叙述缓冲 | **已定 B2** |
+| Q9 | 评测起步 60 条 / YAML / pytest runner | 本轮新提 |
+
