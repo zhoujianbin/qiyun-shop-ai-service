@@ -15,4 +15,6 @@ status: ACTIVE
 - [人工审核清单](人工审核清单.md)
 - [已知边界与未实现能力](已知边界与未实现能力.md)
 
-运行：`uv run python knowledge_raw/99_校验与维护/validate_knowledge.py`。非零退出码表示知识库不可发布。
+> 本目录是**开发侧**的校验工具与报告，不属于企业知识库，不参与导入与检索。
+
+运行：`python docs/知识库校验/validate_knowledge.py`（默认校验 `knowledge_raw/`，可用 `--root` 指定）。非零退出码表示知识库不可发布。

@@ -200,9 +200,9 @@ qiyun-shop-ai-service/
 │                     + 评测契约与 L1 门禁 + 前端契约一致性 + 命名与静态门禁
 ├── web/              前端工程（49 页面 / 32 后台路由 / 26 组件）
 │   └── public/       商品 WebP 图片（products/）与首页 Banner（banners/），见「商品图片」
-├── docs/             一期设计文档 + docs/四期/（需求说明、验收清单、抽取与审核记录、手工测试指南、演示案例）
+├── docs/             一/二/三/四期文档 + 知识库校验工具与报告（开发侧，不参与导入）
 ├── openspec/         spec-driven 变更管理：specs/（11 个能力）+ changes/archive/
-├── knowledge_raw/    企业知识库原始文档（158 个 Markdown + 结构化规则 yaml，按业务域分 16 个目录）
+├── knowledge_raw/    企业知识库原始文档（152 个 Markdown + 结构化规则 yaml，按业务域分 15 个目录）
 └── LICENSE           MIT
 ```
 
@@ -226,17 +226,18 @@ qiyun-shop-ai-service/
 |---|---|
 | `docs/四期/` | 需求说明书、验收清单（8 组 57 项）、本体抽取与审核记录、手工测试指南、演示案例 |
 | `docs/知识库运维.md` | 知识库与本体日常运维：导入、发布、重挂、图谱、门禁命令 |
+| `docs/知识库校验/` | 校验规则、校验报告与 `validate_knowledge.py`（开发侧工具，不属于企业知识库） |
 | `openspec/specs/` | 11 个能力的行为规格（spec-driven 真源） |
 | `openspec/changes/archive/` | 已归档变更（含提案、设计、任务与验收记录） |
 
 ### knowledge_raw/（企业知识库原始文档）
 
-栖云智家企业知识库的原始 Markdown，158 个文件 + 11 份结构化规则 yaml，按 16 个业务域目录组织：
+栖云智家企业知识库的原始 Markdown，152 个文件 + 11 份结构化规则 yaml，按 15 个业务域目录组织（校验类开发文档已移出至 `docs/知识库校验/`）：
 
     00_企业基础  01_产品知识  02_订单支付与发票  03_物流与履约  04_安装与交付
     05_退换货与退款  06_保修维修与备件  07_账户设备与家庭共享  08_云服务与订阅
     09_客服SOP  10_工单投诉与升级  11_隐私安全与高风险场景  12_场景案例
-    13_结构化规则  14_主题手册  99_校验与维护
+    13_结构化规则  14_主题手册
 
 每篇文档带 `document_id`、`version`、`owner` 等元信息；`SOURCE_OF_TRUTH.md` 定义真源优先级与冲突处理，
 `AGENTS.md` / `CLAUDE.md` 定义 AI Agent 的检索与回答规则。商品主档（`01_产品知识/`）是 `scripts/bootstrap.py`

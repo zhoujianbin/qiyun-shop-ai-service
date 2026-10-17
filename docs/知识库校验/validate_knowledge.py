@@ -288,7 +288,8 @@ def validate(root: Path) -> tuple[list[str], dict[str, int]]:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[1])
+    # 本脚本已移出 knowledge_raw（开发工具不进企业知识库），默认根目录显式指向它
+    parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[2] / "knowledge_raw")
     args = parser.parse_args()
     errors, stats = validate(args.root.resolve())
     for error in errors:
