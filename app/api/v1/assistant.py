@@ -13,6 +13,7 @@ import time
 from collections.abc import Iterator
 
 from fastapi import APIRouter, Depends, Query, Request
+from sqlalchemy import select
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
@@ -163,6 +164,24 @@ def stream_message(conversation_id: int, payload: StreamRequest, request: Reques
     state = assistant_graph.run(db, content, actor=actor, history=history[:-1],
                                 identity_level=payload.identity_level)
 
+    # 自动转人工：高风险规则命中 / 同一问题第二次仍无命中
+    if state.guard_hints:
+        assistant_handoff.create_handoff(
+            db, actor, conversation, reason="HIGH_RISK_RULE", summary=state.guard_hints[0])
+    elif state.decision == "REFUSE":
+        previous_refusal = db.execute(
+            select(Message).where(
+                Message.conversation_id == conversation_id,
+                Message.role == "ASSISTANT",
+                Message.id != answer.id,
+                Message.status == "REFUSED",
+            ).order_by(Message.seq.desc())
+        ).scalars().first()
+        if previous_refusal is not None:
+            assistant_handoff.create_handoff(
+                db, actor, conversation, reason="NO_HIT", summary="连续两次检索无命中")
+    db.commit()
+
     def responder() -> Iterator[str]:
         if state.decision != "ANSWER":
             text = assistant_graph.fixed_answer(state)
@@ -184,6 +203,8 @@ def stream_message(conversation_id: int, payload: StreamRequest, request: Reques
                 collected.append(text)
                 yield _sse("delta", {"text": text})
         except Exception as exc:  # noqa: BLE001
+            assistant_handoff.create_handoff(
+                db, actor, conversation, reason="MODEL_ERROR", summary=str(exc)[:200])
             _finish(db, answer, "FAILED", "".join(collected), latency_ms=_elapsed(started), state=state)
             yield _sse("error", {"code": "ASSISTANT_GENERATION_FAILED", "message": str(exc)[:300],
                                  "details": None,

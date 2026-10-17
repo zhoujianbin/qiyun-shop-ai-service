@@ -1,0 +1,69 @@
+# 升级规则触发词 → 中文别名
+# 用途：escalation_matrix.yaml 的 triggers 是英文标识符，用户提问是中文，
+#       护栏靠这张表把两者桥接起来。改这里不需要改代码。
+# 维护：业务侧新增/调整客服话术同义词时更新；tests/test_assistant_guard_alias.py 会校验完整性。
+person_trapped:
+  - 被困
+  - 关在里面
+  - 出不去
+  - 门打不开
+fire:
+  - 着火
+  - 起火
+  - 火灾
+medical_emergency:
+  - 急救
+  - 受伤
+  - 晕倒
+  - 昏迷
+smoke:
+  - 冒烟
+  - 烟雾
+sparks:
+  - 火花
+  - 打火
+electric_shock:
+  - 触电
+  - 电到
+battery_fire:
+  - 电池起火
+  - 电池着火
+water_near_energized_equipment:
+  - 进水
+  - 水浸
+  - 泡水
+  - 漏水
+abnormal_heat_without_smoke:
+  - 发热
+  - 发烫
+burnt_smell_without_visible_fire:
+  - 焦味
+  - 烧焦
+battery_swelling:
+  - 鼓包
+  - 膨胀
+account_takeover:
+  - 账号被盗
+  - 被盗
+unknown_admin:
+  - 陌生管理员
+  - 陌生账号
+credential_change:
+  - 凭证变更
+  - 改密码
+unknown_camera_access:
+  - 陌生访问
+  - 被陌生人看
+unexpected_sharing:
+  - 异常分享
+batch_device_failure:
+  - 批量故障
+  - 批量坏
+cloud_region_outage:
+  - 云服务故障
+  - 云端不可用
+core_function_unavailable_with_workaround:
+  - 功能不可用
+remote_unlock:
+  - 远程开锁
+  - 远程开门

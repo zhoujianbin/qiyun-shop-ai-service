@@ -71,6 +71,8 @@ export const assistantApi = {
     api.post<Handoff>(`/ai/handoffs/${id}/close`, body),
   agentMessage: (id: number | string, body: { content: string }) =>
     api.post<ChatMessage>(`/ai/conversations/${id}/agent-messages`, body),
+  submitFeedback: (messageId: number | string, body: { value: string; reason?: string }) =>
+    api.post<Record<string, unknown>>(`/ai/messages/${messageId}/feedback`, body),
   trace: (messageId: number | string) =>
     api.get<Array<Record<string, unknown>>>(`/ai/messages/${messageId}/trace`),
 };

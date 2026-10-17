@@ -3,9 +3,13 @@ import Button from 'antd/es/button';
 import Card from 'antd/es/card';
 import Collapse from 'antd/es/collapse';
 import Input from 'antd/es/input';
+import Modal from 'antd/es/modal';
 import Space from 'antd/es/space';
 import Tag from 'antd/es/tag';
+import Tooltip from 'antd/es/tooltip';
 import Typography from 'antd/es/typography';
+import DislikeOutlined from '@ant-design/icons/DislikeOutlined';
+import LikeOutlined from '@ant-design/icons/LikeOutlined';
 import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { assistantApi, streamChat } from '@/api/endpoints/assistant';
@@ -14,6 +18,13 @@ import { ROUTES } from '@/constants/routes';
 import type { ChatMessage, Citation, Conversation } from '@/types/assistant';
 
 const QUICK_QUESTIONS = ['门锁没电了怎么办', '七天无理由退货条件', '摄像头陌生人访问怎么处理'];
+
+const DISLIKE_REASONS = [
+  { value: 'OFF_TOPIC', label: '答非所问' },
+  { value: 'NO_CITATION', label: '缺少引用' },
+  { value: 'OUTDATED', label: '内容过时' },
+  { value: 'UNSAFE', label: '不安全' },
+];
 
 /** 客户对话页：微信式气泡、思考态→流式、引用折叠、快捷问题、失败重试。 */
 export default function ChatPage() {
@@ -27,6 +38,9 @@ export default function ChatPage() {
   const [citations, setCitations] = useState<Citation[]>([]);
   const [failed, setFailed] = useState<{ content: string; code?: string; requestId?: string } | null>(null);
   const [sending, setSending] = useState(false);
+  const [feedback, setFeedback] = useState<Record<number, string>>({});
+  const [dislikeFor, setDislikeFor] = useState<number | null>(null);
+  const answerIdRef = useRef<number | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
   const create = useMutation({
@@ -61,7 +75,9 @@ export default function ChatPage() {
     let answer = '';
     try {
       await streamChat(conversation.id, { content, client_msg_id: clientMsgId }, (event) => {
-        if (event.name === 'delta') {
+        if (event.name === 'meta') {
+          answerIdRef.current = Number(event.data.message_id ?? 0) || null;
+        } else if (event.name === 'delta') {
           setThinking(false);
           answer += event.data.text;
           setStreaming(answer);
@@ -74,7 +90,8 @@ export default function ChatPage() {
       });
       if (answer) {
         setMessages((prev) => [...prev, {
-          id: -Date.now(), seq: prev.length + 2, role: 'ASSISTANT', content: answer, status: 'DONE',
+          id: answerIdRef.current ?? -Date.now(), seq: prev.length + 2,
+          role: 'ASSISTANT', content: answer, status: 'DONE',
         }]);
       }
     } catch (error) {
@@ -85,6 +102,12 @@ export default function ChatPage() {
       setSending(false);
       await queryClient.invalidateQueries({ queryKey: ['assistant'] });
     }
+  };
+
+  const submitFeedback = (messageId: number, value: string, reason?: string) => {
+    assistantApi.submitFeedback(messageId, { value, reason })
+      .then(() => setFeedback((prev) => ({ ...prev, [messageId]: value })))
+      .catch((error) => message.error(`反馈提交失败：${(error as Error).message}`));
   };
 
   const handoff = useMutation({
@@ -123,6 +146,24 @@ export default function ChatPage() {
               }}>
                 <Typography.Text style={{ color: item.role === 'USER' ? '#fff' : 'inherit' }}>{item.content}</Typography.Text>
                 {item.role === 'AGENT' ? <Tag color="orange" style={{ marginLeft: 8 }}>人工</Tag> : null}
+                {item.role === 'ASSISTANT' && item.id > 0 ? (
+                  <div style={{ marginTop: 4 }}>
+                    <Tooltip title="有帮助">
+                      <Button
+                        size="small" type="text" aria-label="有帮助"
+                        icon={<LikeOutlined style={{ color: feedback[item.id] === 'LIKE' ? '#1F5EFF' : undefined }} />}
+                        onClick={() => submitFeedback(item.id, 'LIKE')}
+                      />
+                    </Tooltip>
+                    <Tooltip title="没帮助">
+                      <Button
+                        size="small" type="text" aria-label="没帮助"
+                        icon={<DislikeOutlined style={{ color: feedback[item.id] === 'DISLIKE' ? '#cf1322' : undefined }} />}
+                        onClick={() => setDislikeFor(item.id)}
+                      />
+                    </Tooltip>
+                  </div>
+                ) : null}
               </div>
             </div>
           ))}
@@ -160,6 +201,27 @@ export default function ChatPage() {
               <Button size="small" onClick={() => send(failed.content)}>重试</Button>
             </Space>
           ) : null}
+          <Modal
+            open={dislikeFor !== null}
+            title="哪里不满意？"
+            footer={null}
+            onCancel={() => setDislikeFor(null)}
+          >
+            <Space direction="vertical" style={{ width: '100%' }}>
+              {DISLIKE_REASONS.map((reason) => (
+                <Button
+                  key={reason.value}
+                  block
+                  onClick={() => {
+                    if (dislikeFor !== null) submitFeedback(dislikeFor, 'DISLIKE', reason.value);
+                    setDislikeFor(null);
+                  }}
+                >
+                  {reason.label}
+                </Button>
+              ))}
+            </Space>
+          </Modal>
           <div ref={bottomRef} />
         </div>
 

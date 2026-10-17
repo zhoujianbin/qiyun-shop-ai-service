@@ -10,9 +10,11 @@
 """
 from __future__ import annotations
 
+import logging
 import re
 import time
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Callable
 
 from sqlalchemy import select
@@ -20,6 +22,8 @@ from sqlalchemy.orm import Session
 
 from app.models.generated import Rule
 from app.services import knowledge_retrieval
+
+logger = logging.getLogger(__name__)
 
 MAX_STEPS = 4
 MAX_PLAN_STEPS = 2
@@ -34,8 +38,11 @@ REALTIME_WORDS = ("到哪了", "到哪儿", "几天能到", "还有多少库存"
 IDENTITY_WORDS = ("我的订单", "退款进度", "物流", "快递", "发票", "绑定", "我的设备")
 
 # escalation 规则的 triggers 是英文标识符，用户提问是中文——必须配中文别名表才可能命中。
-# 只覆盖安全红线相关的 trigger，别名取自 knowledge_raw/13_结构化规则/escalation_matrix.yaml 的语义。
-ESCALATION_ALIASES: dict[str, tuple[str, ...]] = {
+# 真源：knowledge_raw/13_结构化规则/escalation_aliases.yaml（业务可维护）；
+# 下面是文件缺失时的内置回退，保证护栏不会因文件问题整体失效。
+ALIAS_FILE = Path(__file__).resolve().parents[2] / "knowledge_raw" / "13_结构化规则" / "escalation_aliases.yaml"
+
+BUILTIN_ALIASES: dict[str, tuple[str, ...]] = {
     "person_trapped": ("被困", "关在里面", "出不去", "门打不开"),
     "fire": ("着火", "起火", "火灾"),
     "medical_emergency": ("急救", "受伤", "晕倒", "昏迷"),
@@ -43,7 +50,7 @@ ESCALATION_ALIASES: dict[str, tuple[str, ...]] = {
     "sparks": ("火花", "打火"),
     "electric_shock": ("触电", "电到"),
     "battery_fire": ("电池起火", "电池着火"),
-    "water_near_energized_equipment": ("进水", "水浸", "泡水"),
+    "water_near_energized_equipment": ("进水", "水浸", "泡水", "漏水"),
     "abnormal_heat_without_smoke": ("发热", "发烫"),
     "burnt_smell_without_visible_fire": ("焦味", "烧焦"),
     "battery_swelling": ("鼓包", "膨胀"),
@@ -57,6 +64,36 @@ ESCALATION_ALIASES: dict[str, tuple[str, ...]] = {
     "core_function_unavailable_with_workaround": ("功能不可用",),
     "remote_unlock": ("远程开锁", "远程开门"),
 }
+
+_alias_cache: dict[str, tuple[str, ...]] | None = None
+
+
+def load_escalation_aliases() -> dict[str, tuple[str, ...]]:
+    """优先读数据文件；缺失或损坏时回退内置字典并告警。"""
+    global _alias_cache
+    if _alias_cache is not None:
+        return _alias_cache
+    try:
+        import yaml
+
+        data = yaml.safe_load(ALIAS_FILE.read_text(encoding="utf-8")) or {}
+        loaded = {
+            str(key): tuple(str(item) for item in (value or []))
+            for key, value in data.items()
+        }
+        if loaded:
+            _alias_cache = loaded
+            return loaded
+    except Exception as exc:  # noqa: BLE001 - 文件问题不能拖垮护栏
+        logger.warning("别名表加载失败，回退内置字典：%s", exc)
+    _alias_cache = BUILTIN_ALIASES
+    return _alias_cache
+
+
+def reset_alias_cache() -> None:
+    global _alias_cache
+    _alias_cache = None
+
 
 PRODUCT_RE = re.compile(r"\bQA?-[A-Z0-9]{2,}(?:-[A-Z0-9]+)*\b|\bQ[A-Z]-[A-Z0-9]{3,}\b")
 RULE_RE = re.compile(r"\bKB-RULE-[A-Z0-9-]+\b")
@@ -246,7 +283,7 @@ def guard_hints(db: Session, question: str) -> list[str]:
             if name in question or name.replace("_", "") in question:
                 matched = True
                 break
-            if any(alias in question for alias in ESCALATION_ALIASES.get(name, ())):
+            if any(alias in question for alias in load_escalation_aliases().get(name, ())):
                 matched = True
                 break
         if not matched:
