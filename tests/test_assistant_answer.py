@@ -84,7 +84,9 @@ def test_guard_hint_from_escalation_rule(monkeypatch):
             priority=1000, status="ACTIVE", conflict_group="escalation",
         ))
         db.commit()
-    monkeypatch.setattr(knowledge_retrieval, "search", _fake_search([HIT]))
+    remote_hit = dict(HIT, snippet="远程开锁属于高风险操作，客服不能远程开门，需上门核验身份。",
+                      title_path="智能门锁 / 远程开锁")
+    monkeypatch.setattr(knowledge_retrieval, "search", _fake_search([remote_hit]))
     with SessionLocal() as db:
         state = assistant_graph.run(db, "能帮我远程开锁吗", actor={"id": 1}, history=[])
     assert state.guard_hints, "命中禁止项时必须给出安全提示"

@@ -82,7 +82,10 @@ def ensure_visible(db: Session, conversation_id: int, *, actor: dict, staff: boo
 
 
 def list_conversations(db: Session, *, actor: dict, staff: bool, page: int, page_size: int) -> dict:
-    statement = select(Conversation).where(Conversation.tenant_id == settings.tenant_id)
+    statement = select(Conversation).where(
+        Conversation.tenant_id == settings.tenant_id,
+        Conversation.message_count > 0,  # 没有任何消息的"空会话"不展示
+    )
     if not staff:
         statement = statement.where(Conversation.user_id == actor["id"])
     total = db.execute(select(func.count()).select_from(statement.subquery())).scalar_one()

@@ -47,6 +47,9 @@ export interface Citation {
 export interface Handoff {
   id: number;
   conversation_id: number;
+  conversation_no?: string | null;
+  title?: string | null;
+  message_count?: number | null;
   reason: string;
   status: string;
   assignee_id?: number | null;

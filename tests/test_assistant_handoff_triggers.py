@@ -14,6 +14,13 @@ HIT = {
     "line_start": 14, "line_end": 16, "snippet": "QL-L3P 使用 8 节 5 号电池。",
 }
 
+HIT_REMOTE = {
+    "source_type": "chunk", "chunk_id": 302, "document_id": "KB-RISK-REMOTE-UNLOCK",
+    "document_pk": 2, "version": 1, "chunk_ord": 0, "title_path": "智能门锁 / 远程开锁",
+    "line_start": 3, "line_end": 6,
+    "snippet": "远程开锁属于高风险操作，客服不得远程开门，需上门核验身份。",
+}
+
 
 def _stream(client, token, cid, content):
     with client.stream("POST", f"/api/v1/ai/conversations/{cid}/messages:stream",
@@ -45,10 +52,10 @@ def _escalation_rule():
 def test_high_risk_rule_creates_handoff(client, monkeypatch):
     _escalation_rule()
     monkeypatch.setattr(knowledge_retrieval, "search",
-                        lambda db, q, **k: {"hits": [HIT], "debug": {"latency_ms": 3}})
+                        lambda db, q, **k: {"hits": [HIT_REMOTE], "debug": {"latency_ms": 3}})
     token = customer_token(client, "buyer_zhang")
     cid = _conversation(client, token)
-    _stream(client, token, cid, "能帮我远程开锁吗")
+    _stream(client, token, cid, "能帮我远程开锁吗")  # 命中 HIT_REMOTE 后触发护栏
     rows = _open_handoffs(cid)
     assert rows and rows[0].reason == "HIGH_RISK_RULE"
 
@@ -83,7 +90,7 @@ def test_model_error_creates_handoff(client, monkeypatch):
 def test_handoff_is_idempotent_per_conversation(client, monkeypatch):
     _escalation_rule()
     monkeypatch.setattr(knowledge_retrieval, "search",
-                        lambda db, q, **k: {"hits": [HIT], "debug": {"latency_ms": 3}})
+                        lambda db, q, **k: {"hits": [HIT_REMOTE], "debug": {"latency_ms": 3}})
     token = customer_token(client, "buyer_zhang")
     cid = _conversation(client, token)
     for _ in range(3):

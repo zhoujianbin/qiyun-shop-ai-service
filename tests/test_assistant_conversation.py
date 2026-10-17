@@ -174,3 +174,13 @@ def test_cleanup_marks_zombie_and_purges_expired(client):
             select(Message).where(Message.conversation_id == conversation_id)
         ).scalars().all()
     assert remaining == []  # 级联删除
+
+
+def test_empty_conversation_is_hidden_from_list(client):
+    """没有任何消息的会话不应该出现在列表里（用户没提问就不该有会话）。"""
+    token = customer_token(client, "buyer_zhang")
+    before = client.get("/api/v1/ai/conversations", headers=auth(token, new_key())).json()["total"]
+    created = _create(client, token)
+    after = client.get("/api/v1/ai/conversations", headers=auth(token, new_key())).json()
+    assert after["total"] == before, "空会话不得出现在列表"
+    assert all(item["id"] != created["id"] for item in after["items"])

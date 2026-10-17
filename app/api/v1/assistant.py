@@ -37,6 +37,8 @@ from app.services.common import now
 router = APIRouter(prefix="/ai", tags=["assistant"])
 
 HEARTBEAT_SECONDS = 15.0
+# 正在生成的回答内容（message_id -> 已生成文本）；仅本进程可见，用于客服侧展示流式过程
+_LIVE: dict[int, str] = {}
 
 
 
@@ -122,8 +124,12 @@ def list_messages(conversation_id: int, request: Request, after_seq: int | None 
     actor = actor_of(request, user, db)
     conversation_service.ensure_visible(
         db, conversation_id, actor=actor, staff=_staff(request, db, user))
-    return conversation_service.list_messages(
+    payload = conversation_service.list_messages(
         db, conversation_id, after_seq=after_seq, page=page, page_size=page_size)
+    for item in payload["items"]:
+        if item["status"] == "STREAMING" and item["id"] in _LIVE:
+            item["content"] = _LIVE[item["id"]]
+    return payload
 
 
 @router.post("/conversations/{conversation_id}/messages:stream")
@@ -168,6 +174,9 @@ def stream_message(conversation_id: int, payload: StreamRequest, request: Reques
     if state.guard_hints:
         assistant_handoff.create_handoff(
             db, actor, conversation, reason="HIGH_RISK_RULE", summary=state.guard_hints[0])
+    elif state.decision == "HANDOFF":
+        assistant_handoff.create_handoff(
+            db, actor, conversation, reason="USER_REQUEST", summary="用户在对话中要求转人工")
     elif state.decision == "REFUSE":
         previous_refusal = db.execute(
             select(Message).where(
@@ -195,12 +204,15 @@ def stream_message(conversation_id: int, payload: StreamRequest, request: Reques
                             "seq": answer.seq, "decision": state.decision,
                             "intent": state.intent})
         collected: list[str] = []
+        last_flush = time.monotonic()
         try:
             for kind, text in _iter_with_heartbeat(responder()):
                 if kind == "ping":
                     yield _sse("ping", {})
                     continue
                 collected.append(text)
+                # 内存缓冲实时内容，供客服工作台轮询看到流式过程（不写库，避免占用额外连接）
+                _LIVE[answer.id] = "".join(collected)
                 yield _sse("delta", {"text": text})
         except Exception as exc:  # noqa: BLE001
             assistant_handoff.create_handoff(
@@ -266,6 +278,7 @@ def _finish(db: Session, message: Message, status: str, content: str, *, latency
                 model=getattr(llm.get_provider(), "name", None),
                 tokens=None,
             ))
+    _LIVE.pop(message.id, None)
     db.add(message)
     audit.record(db, None, "ai.message.answer", "assistant.message", message.id,
                  after={"status": status, "chars": len(content),
@@ -345,6 +358,25 @@ def request_handoff(conversation_id: int, request: Request, db: Session = Depend
     conversation = conversation_service.ensure_visible(
         db, conversation_id, actor=actor, staff=_staff(request, db, user))
     return assistant_handoff.create_handoff(db, actor, conversation, reason="USER_REQUEST")
+
+
+@router.post("/conversations/{conversation_id}/customer-messages", response_model=MessageView)
+def customer_message(conversation_id: int, payload: AgentMessageRequest, request: Request,
+                     db: Session = Depends(get_db),
+                     user: AppUser = Depends(get_current_user)) -> dict:
+    """人工接管期间客户发的消息：只入库给客服，不触发模型。"""
+    actor = actor_of(request, user, db)
+    conversation = conversation_service.ensure_visible(
+        db, conversation_id, actor=actor, staff=_staff(request, db, user))
+    if conversation.status == "CLOSED":
+        raise Conflict("CONVERSATION_CLOSED", "会话已关闭")
+    content = payload.content.strip()
+    conversation_service.check_length(content)
+    conversation_service.check_rate_limit(db, user.id)
+    row = conversation_service.append_message(
+        db, conversation_id, role="USER", content=content, status="DONE")
+    audit.record(db, actor, "ai.message.customer_to_agent", "assistant.message", row.id)
+    return conversation_service.message_view(row)
 
 
 @router.get("/handoffs", response_model=list[HandoffView])

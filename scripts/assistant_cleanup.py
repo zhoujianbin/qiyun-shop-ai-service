@@ -37,6 +37,19 @@ def purge_stale_streaming(db, *, dry_run: bool = False) -> int:
     return len(rows)
 
 
+def purge_empty_conversations(db, *, hours: int = 1, dry_run: bool = False) -> int:
+    """删除从未产生消息的空会话（用户建了却没提问）。"""
+    cutoff = now() - timedelta(hours=hours)
+    ids = db.execute(
+        select(Conversation.id).where(
+            Conversation.message_count == 0, Conversation.created_at < cutoff
+        )
+    ).scalars().all()
+    if not dry_run and ids:
+        db.execute(delete(Conversation).where(Conversation.id.in_(ids)))
+    return len(ids)
+
+
 def purge_closed_conversations(db, *, days: int, dry_run: bool = False) -> int:
     cutoff = now() - timedelta(days=days)
     # 用 last_message_at 而不是 updated_at：后者被 tg_touch_updated_at 触发器维护，
@@ -61,10 +74,12 @@ def main() -> int:
 
     with SessionLocal() as db:
         stale = purge_stale_streaming(db, dry_run=args.dry_run)
+        empty = purge_empty_conversations(db, dry_run=args.dry_run)
         removed = purge_closed_conversations(db, days=days, dry_run=args.dry_run)
         if not args.dry_run:
             db.commit()
-    print(f"stale_streaming={stale} closed_conversations={removed} days={days} dry_run={args.dry_run}")
+    print(f"stale_streaming={stale} empty_conversations={empty} closed_conversations={removed} "
+          f"days={days} dry_run={args.dry_run}")
     return 0
 
 

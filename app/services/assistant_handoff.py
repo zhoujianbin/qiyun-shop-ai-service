@@ -106,10 +106,13 @@ def order_fact_snapshot(db: Session, order) -> dict:
     }
 
 
-def handoff_view(row: Handoff) -> dict:
+def handoff_view(row: Handoff, conversation: Conversation | None = None) -> dict:
     return {
         "id": row.id,
         "conversation_id": row.conversation_id,
+        "conversation_no": conversation.conversation_no if conversation is not None else None,
+        "title": conversation.title if conversation is not None else None,
+        "message_count": conversation.message_count if conversation is not None else None,
         "reason": row.reason,
         "status": row.status,
         "assignee_id": row.assignee_id,
@@ -129,7 +132,7 @@ def create_handoff(db: Session, actor: dict, conversation: Conversation, *, reas
         )
     ).scalar_one_or_none()
     if existing is not None:
-        return handoff_view(existing)
+        return handoff_view(existing, conversation)
     row = Handoff(
         tenant_id=settings.tenant_id,
         conversation_id=conversation.id,
@@ -146,17 +149,23 @@ def create_handoff(db: Session, actor: dict, conversation: Conversation, *, reas
             select(Handoff).where(Handoff.conversation_id == conversation.id,
                                   Handoff.status.in_(("OPEN", "CLAIMED")))
         ).scalar_one()
-        return handoff_view(existing)
+        return handoff_view(existing, conversation)
     audit.record(db, actor, "ai.handoff.create", "assistant.handoff", row.id, after={"reason": reason})
     audit.emit(db, "ai.handoff.created", "conversation", conversation.id, {"reason": reason})
-    return handoff_view(row)
+    return handoff_view(row, conversation)
 
 
 def list_handoffs(db: Session, *, status: str | None = None) -> list[dict]:
     statement = select(Handoff).where(Handoff.tenant_id == settings.tenant_id)
     if status:
         statement = statement.where(Handoff.status == status.upper())
-    return [handoff_view(row) for row in db.execute(statement.order_by(Handoff.id)).scalars().all()]
+    rows = db.execute(statement.order_by(Handoff.id)).scalars().all()
+    conversations = {
+        item.id: item for item in db.execute(
+            select(Conversation).where(Conversation.id.in_({row.conversation_id for row in rows}))
+        ).scalars().all()
+    } if rows else {}
+    return [handoff_view(row, conversations.get(row.conversation_id)) for row in rows]
 
 
 def _load(db: Session, handoff_id: int) -> Handoff:
@@ -181,7 +190,7 @@ def claim_handoff(db: Session, actor: dict, handoff_id: int) -> dict:
     audit.record(db, actor, "ai.handoff.claim", "assistant.handoff", row.id)
     audit.emit(db, "ai.handoff.claimed", "conversation", row.conversation_id, {"handoff_id": row.id})
     db.flush()
-    return handoff_view(row)
+    return handoff_view(row, conversation)
 
 
 def close_handoff(db: Session, actor: dict, handoff_id: int, *, summary: str | None,
@@ -201,7 +210,7 @@ def close_handoff(db: Session, actor: dict, handoff_id: int, *, summary: str | N
                  after={"back_to_ai": back_to_ai})
     audit.emit(db, "ai.handoff.closed", "conversation", row.conversation_id, {"handoff_id": row.id})
     db.flush()
-    return handoff_view(row)
+    return handoff_view(row, conversation)
 
 
 def agent_message(db: Session, actor: dict, conversation: Conversation, content: str) -> dict:

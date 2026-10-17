@@ -26,6 +26,12 @@ export async function streamChat(
       signal,
     },
   );
+  if (response.status === 409) {
+    const detail = await response.json().catch(() => ({}));
+    const error = new Error(detail?.code === 'AI_PAUSED' ? '客服已接管' : '会话已结束');
+    (error as Error & { code?: string }).code = detail?.code ?? 'CONFLICT';
+    throw error;
+  }
   if (!response.ok || !response.body) {
     throw new Error(`流式请求失败：HTTP ${response.status}`);
   }
@@ -69,6 +75,8 @@ export const assistantApi = {
   claimHandoff: (id: number | string) => api.post<Handoff>(`/ai/handoffs/${id}/claim`),
   closeHandoff: (id: number | string, body: { summary: string; back_to_ai?: boolean }) =>
     api.post<Handoff>(`/ai/handoffs/${id}/close`, body),
+  customerMessage: (id: number | string, body: { content: string }) =>
+    api.post<ChatMessage>(`/ai/conversations/${id}/customer-messages`, body),
   agentMessage: (id: number | string, body: { content: string }) =>
     api.post<ChatMessage>(`/ai/conversations/${id}/agent-messages`, body),
   submitFeedback: (messageId: number | string, body: { value: string; reason?: string }) =>

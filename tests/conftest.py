@@ -19,7 +19,13 @@ def _test_db_name(base_url: str) -> str:
     if explicit:
         return explicit
     name = base_url.rstrip("/").rsplit("/", 1)[-1]
-    return re.sub(r"_dev", "_test", name, count=1)
+    derived = re.sub(r"_dev", "_test", name, count=1)
+    if derived == name:  # 库名不含 _dev 时派生不出测试库，绝不能落到业务库上
+        raise RuntimeError(
+            f"业务库名 {name!r} 不含 _dev，测试库无法派生；"
+            "请把 DATABASE_URL 指向 xxx_dev_* 或显式设置 TEST_DB"
+        )
+    return derived
 
 
 def _base_dsn() -> str:

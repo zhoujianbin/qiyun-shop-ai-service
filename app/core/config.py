@@ -45,6 +45,8 @@ class Settings(BaseSettings):
     assistant_message_max_chars: int = 2000
     assistant_rate_limit_per_minute: int = 20
     assistant_retention_days: int = 90
+    assistant_use_llm_planner: bool = False      # 三期无工具，默认关；四期有工具时再打开
+    assistant_relevance_min_ratio: float = 0.2   # 问题与 top 命中关键词重合度下限
 
     @property
     def cors_origin_list(self) -> list[str]:

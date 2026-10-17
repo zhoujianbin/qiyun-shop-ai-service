@@ -7,6 +7,9 @@ person_trapped:
   - 关在里面
   - 出不去
   - 门打不开
+  - 锁死
+  - 反锁出不来
+  - 被困在门外
 fire:
   - 着火
   - 起火
@@ -25,6 +28,8 @@ sparks:
 electric_shock:
   - 触电
   - 电到
+  - 漏电
+  - 麻手
 battery_fire:
   - 电池起火
   - 电池着火
@@ -42,9 +47,14 @@ burnt_smell_without_visible_fire:
 battery_swelling:
   - 鼓包
   - 膨胀
+  - 鼓起来
+  - 变形
 account_takeover:
   - 账号被盗
   - 被盗
+  - 被盗号
+  - 异地登录
+  - 不是我登录
 unknown_admin:
   - 陌生管理员
   - 陌生账号
@@ -53,7 +63,13 @@ credential_change:
   - 改密码
 unknown_camera_access:
   - 陌生访问
+  - 陌生人访问
+  - 陌生人看
   - 被陌生人看
+  - 被偷看
+  - 偷窥
+  - 别人能看
+  - 不是我本人看
 unexpected_sharing:
   - 异常分享
 batch_device_failure:

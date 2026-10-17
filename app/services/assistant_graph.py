@@ -20,6 +20,7 @@ from typing import Callable
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.models.generated import Rule
 from app.services import knowledge_retrieval
 
@@ -43,21 +44,21 @@ IDENTITY_WORDS = ("我的订单", "退款进度", "物流", "快递", "发票", 
 ALIAS_FILE = Path(__file__).resolve().parents[2] / "knowledge_raw" / "13_结构化规则" / "escalation_aliases.yaml"
 
 BUILTIN_ALIASES: dict[str, tuple[str, ...]] = {
-    "person_trapped": ("被困", "关在里面", "出不去", "门打不开"),
+    "person_trapped": ("被困", "关在里面", "出不去", "门打不开", "锁死", "反锁出不来"),
     "fire": ("着火", "起火", "火灾"),
     "medical_emergency": ("急救", "受伤", "晕倒", "昏迷"),
     "smoke": ("冒烟", "烟雾"),
     "sparks": ("火花", "打火"),
-    "electric_shock": ("触电", "电到"),
+    "electric_shock": ("触电", "电到", "漏电", "麻手"),
     "battery_fire": ("电池起火", "电池着火"),
     "water_near_energized_equipment": ("进水", "水浸", "泡水", "漏水"),
     "abnormal_heat_without_smoke": ("发热", "发烫"),
     "burnt_smell_without_visible_fire": ("焦味", "烧焦"),
-    "battery_swelling": ("鼓包", "膨胀"),
-    "account_takeover": ("账号被盗", "被盗"),
+    "battery_swelling": ("鼓包", "膨胀", "鼓起来", "变形"),
+    "account_takeover": ("账号被盗", "被盗", "被盗号", "异地登录", "不是我登录"),
     "unknown_admin": ("陌生管理员", "陌生账号"),
     "credential_change": ("凭证变更", "改密码"),
-    "unknown_camera_access": ("陌生访问", "被陌生人看"),
+    "unknown_camera_access": ("陌生访问", "陌生人访问", "陌生人看", "被陌生人看", "被偷看", "偷窥", "别人能看"),
     "unexpected_sharing": ("异常分享",),
     "batch_device_failure": ("批量故障", "批量坏"),
     "cloud_region_outage": ("云服务故障", "云端不可用"),
@@ -148,10 +149,16 @@ def classify_rule(question: str) -> str | None:
 
 
 def classify(question: str) -> tuple[str, bool]:
-    """返回 (intent, 是否规则命中)。未命中才调 LLM。"""
+    """返回 (intent, 是否规则命中)。
+
+    规则未命中时**默认不调模型**：三期只有"检索"一条可执行路径，让模型判意图
+    只会给每个普通问题加 3–5s 首字延迟。需要时用 ASSISTANT_USE_LLM_PLANNER 打开。
+    """
     rule = classify_rule(question)
     if rule:
         return rule, True
+    if not settings.assistant_use_llm_planner:
+        return "KNOWLEDGE", False
     try:
         from app.integrations import llm
 
@@ -244,6 +251,35 @@ def replan(db: Session, state: State, *, actor: dict | None, identity_level: str
     return state
 
 
+STOP_GRAMS = {
+    "什么", "怎么", "么办", "如何", "可以", "需要", "是否", "哪些", "多少", "我的",
+    "一下", "请问", "问题", "怎样", "为什", "这个", "那个", "还是", "或者", "以及",
+}
+
+
+def _grams(text: str) -> set[str]:
+    cleaned = re.sub(r"[^\u4e00-\u9fa5A-Za-z0-9]", "", text or "")
+    grams = {cleaned[index:index + 2] for index in range(len(cleaned) - 1)}
+    return {gram for gram in grams if gram not in STOP_GRAMS}
+
+
+def relevance_of(question: str, hit: dict) -> float:
+    """问题与一条命中的关键词重合度（0~1）。"""
+    question_grams = _grams(question)
+    if not question_grams:
+        return 1.0
+    target = _grams(f"{hit.get('title_path') or ''} {hit.get('snippet') or ''}")
+    return len(question_grams & target) / len(question_grams)
+
+
+def relevance_ok(question: str, hits: list[dict]) -> bool:
+    """任一前 3 条命中足够相关即视为"有命中"；否则整批作废（不给无关引用）。"""
+    if not hits:
+        return False
+    threshold = settings.assistant_relevance_min_ratio
+    return any(relevance_of(question, hit) >= threshold for hit in hits[:3])
+
+
 def build_citations(hits: list[dict]) -> list[dict]:
     citations = []
     for rank, hit in enumerate(hits):
@@ -298,6 +334,10 @@ def finalize(db: Session, state: State, *, history: list[dict]) -> State:
     if state.elapsed() > TOTAL_TIMEOUT_SECONDS:
         state.degraded = True
         state.decision = "REFUSE"
+    if state.decision == "ANSWER" and state.hits and not relevance_ok(state.question, state.hits):
+        state.observations.append({"tool": "relevance_gate", "ok": False,
+                                   "ratio": max(relevance_of(state.question, hit) for hit in state.hits[:3])})
+        state.hits = []
     if state.decision == "ANSWER":
         if not state.hits:
             state.decision = "CLARIFY" if len(state.question) < 12 else "REFUSE"
