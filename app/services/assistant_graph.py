@@ -261,15 +261,29 @@ def _filters(db: Session, state: State) -> dict | None:
     return {"product_scope": state.product_scope} if covered else None
 
 
+def _search(db: Session, state: State, query: str, *, actor: dict | None,
+            identity_level: str, extra_filters: dict | None = None) -> dict:
+    """带过滤检索；若过滤把召回打成 0，退回不带过滤再试一次（记录留痕）。"""
+    filters = extra_filters if extra_filters is not None else _filters(db, state)
+    observation = TOOLS["search_knowledge"].run(
+        db, {"question": state.question},
+        {"query": query, "actor": actor, "identity_level": identity_level, "filters": filters},
+    )
+    if filters and not observation["hits"]:
+        state.observations.append({"tool": "filter_fallback", "ok": True, "query": query,
+                                   "dropped_filters": filters})
+        observation = TOOLS["search_knowledge"].run(
+            db, {"question": state.question},
+            {"query": query, "actor": actor, "identity_level": identity_level, "filters": None},
+        )
+    return observation
+
+
 def execute(db: Session, state: State, *, actor: dict | None, identity_level: str = "public") -> State:
     if state.decision != "ANSWER":
         return state
     state.steps += 1
-    observation = TOOLS["search_knowledge"].run(
-        db, {"question": state.question},
-        {"query": state.question, "actor": actor, "identity_level": identity_level,
-         "filters": _filters(db, state)},
-    )
+    observation = _search(db, state, state.question, actor=actor, identity_level=identity_level)
     state.observations.append({"tool": "search_knowledge", "ok": True, **observation})
     state.hits = observation["hits"]
     return state
@@ -283,11 +297,7 @@ def replan(db: Session, state: State, *, actor: dict | None, identity_level: str
     state.steps += 1
     rewritten = rewrite_query(state.question)
     state.observations.append({"tool": "search_knowledge", "query": rewritten, "rewrite": True})
-    observation = TOOLS["search_knowledge"].run(
-        db, {"question": state.question},
-        {"query": rewritten, "actor": actor, "identity_level": identity_level,
-         "filters": _filters(db, state)},
-    )
+    observation = _search(db, state, rewritten, actor=actor, identity_level=identity_level)
     state.observations[-1].update({"ok": True, **observation})
     state.hits = observation["hits"]
     return state
@@ -357,11 +367,9 @@ def expand(db: Session, state: State, *, actor: dict | None, identity_level: str
     if not neighbor_scopes:
         return state
     state.steps += 1
-    observation = TOOLS["search_knowledge"].run(
-        db, {"question": state.question},
-        {"query": state.question, "actor": actor, "identity_level": identity_level,
-         "filters": {"product_scope": neighbor_scopes[0]}},
-    )
+    observation = _search(db, state, state.question, actor=actor,
+                          identity_level=identity_level,
+                          extra_filters={"product_scope": neighbor_scopes[0]})
     before = len(state.hits)
     state.hits = _merge_hits(state.hits, observation["hits"])
     state.observations.append({

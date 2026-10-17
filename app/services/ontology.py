@@ -624,6 +624,33 @@ def backfill_chunk_entities(db: Session, actor: dict, *, limit: int | None = Non
     return {"inserted": inserted, "scanned": len(rows)}
 
 
+def backfill_product_scope(db: Session, actor: dict) -> dict:
+    """把二期文档的 product_scope 补上：仅当该文档的切片只关联到一个产品实体。
+
+    只写已有列的数据（不改表结构），且只填空值——已有值不动，可重复执行。
+    """
+    result = db.execute(text("""
+        UPDATE knowledge.document d
+        SET product_scope = sub.scope
+        FROM (
+            SELECT ce.document_id, min(e.code) AS scope
+            FROM ontology.chunk_entity ce
+            JOIN ontology.entity e ON e.id = ce.entity_id
+            WHERE e.kind = 'product' AND ce.status = 'APPROVED' AND ce.tenant_id = :tenant
+            GROUP BY ce.document_id
+            HAVING count(DISTINCT e.code) = 1
+        ) AS sub
+        WHERE d.document_id = sub.document_id
+          AND d.tenant_id = :tenant
+          AND d.product_scope IS NULL
+        RETURNING d.document_id
+    """), {"tenant": settings.tenant_id}).fetchall()
+    audit.record(db, actor, "ontology.product_scope.backfill", "knowledge.document", None,
+                 after={"filled": len(result)})
+    db.commit()
+    return {"filled": len(result), "documents": [row[0] for row in result]}
+
+
 def relink_chunks(db: Session, actor: dict) -> dict:
     """文档发新版后按逻辑键重挂：只更新 chunk_id，不重跑实体抽取。"""
     result = db.execute(text("""

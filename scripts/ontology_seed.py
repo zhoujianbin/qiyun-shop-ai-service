@@ -29,6 +29,8 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--auto-approve", action="store_true", help="把 DRAFT 实体批量审核通过")
     parser.add_argument("--with-backfill", action="store_true", help="回填 ontology.chunk_entity")
+    parser.add_argument("--with-scope-backfill", action="store_true",
+                        help="把唯一归属某产品的文档的 product_scope 补上（只写数据不改表）")
     parser.add_argument("--json", action="store_true", help="输出 JSON 摘要")
     args = parser.parse_args()
 
@@ -47,6 +49,7 @@ def main() -> int:
                     text("select id from ontology.entity where kind = 'fault'")).fetchall()]
                 ontology.review(db, ACTOR, entity_ids=fault_ids, action="approve")
         backfilled = ontology.backfill_chunk_entities(db, ACTOR) if args.with_backfill else None
+        scoped = ontology.backfill_product_scope(db, ACTOR) if args.with_scope_backfill else None
 
         summary = {
             "import": {k: imported[k] for k in ("total_entity", "total_relation")},
@@ -55,6 +58,7 @@ def main() -> int:
             "review_ai": reviewed,
             "approved": approved,
             "backfill": backfilled,
+            "scope_backfill": ({k: scoped[k] for k in ("filled",)} if scoped else None),
         }
         summary["by_predicate"] = {row[0]: row[1] for row in db.execute(text(
             "select predicate, count(*) from ontology.relation where status = 'APPROVED'"
