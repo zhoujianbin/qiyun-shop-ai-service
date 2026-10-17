@@ -4,10 +4,10 @@
 
 ## 1 数据与迁移
 
-- [ ] 1.1 `db/migrations/0009_ontology_schema.sql`：新建 `ontology` schema 与 entity / relation / alias / entity_tag / chunk_entity 五表，含唯一键、CHECK 枚举、索引、表注释；全部 `CREATE ... IF NOT EXISTS`；验证：空库重放两次表数稳定，`B1`
-- [ ] 1.2 `db/migrations/0010_assistant_action.sql`：`assistant.pending_action`（含 `UNIQUE(conversation_id, action_key)` 与 `UNIQUE(conversation_id, message_id)`）、`assistant.tool_call`；验证：并发插同 key 冲突，`B4`、`B5`
-- [ ] 1.3 `db/migrations/0011_ontology_tool_permissions.sql`：7 个权限码（`tool:read`/`tool:write:order`/`tool:write:aftersales`/`tool:admin`/`ontology:read`/`ontology:write`/`ontology:review`）+ 角色绑定，`ON CONFLICT DO NOTHING`，空库跳过；验证：`B6`，且 `AI_AGENT` 仅有 `tool:read`
-- [ ] 1.4 更新 `db/schema.sql` 与 `scripts/gen_models.py` 产出；验证：`B3` = 68，`git diff` 只增不删，`B7`
+- [x] 1.1 `db/migrations/0009_ontology_schema.sql`：新建 `ontology` schema 与 entity / relation / alias / entity_tag / chunk_entity 五表，含唯一键、CHECK 枚举、索引、表注释；全部 `CREATE ... IF NOT EXISTS`；验证：空库重放两次表数稳定，`B1`
+- [x] 1.2 `db/migrations/0010_assistant_action.sql`：`assistant.pending_action`（含 `UNIQUE(conversation_id, action_key)` 与 `UNIQUE(conversation_id, message_id)`）、`assistant.tool_call`；验证：并发插同 key 冲突，`B4`、`B5`
+- [x] 1.3 `db/migrations/0011_ontology_tool_permissions.sql`：7 个权限码（`tool:read`/`tool:write:order`/`tool:write:aftersales`/`tool:admin`/`ontology:read`/`ontology:write`/`ontology:review`）+ 角色绑定，`ON CONFLICT DO NOTHING`，空库跳过；验证：`B6`，且 `AI_AGENT` 仅有 `tool:read`
+- [x] 1.4 更新 `db/schema.sql` 与 `scripts/gen_models.py` 产出；验证：`B3` = 68，`git diff` 只增不删，`B7`
 
 ## 2 本体服务与导入
 

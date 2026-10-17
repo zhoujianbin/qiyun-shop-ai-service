@@ -1052,3 +1052,115 @@ class RetrievalTrace(Base):
     tokens = mapped_column(Integer)
     created_at = mapped_column(DateTime(timezone=True), server_default=text("now()"))
 
+
+class Entity(Base):
+    __tablename__ = "entity"
+    __table_args__ = {"schema": "ontology"}
+    id = mapped_column(BigInteger, primary_key=True)
+    tenant_id = mapped_column(BigInteger)
+    code = mapped_column(String(64))
+    kind = mapped_column(Text)
+    name = mapped_column(String(160))
+    summary = mapped_column(Text)
+    attrs = mapped_column(JSONB, server_default=text("'{}'::jsonb"))
+    status = mapped_column(Text, server_default=text("'DRAFT'"))
+    source = mapped_column(Text, server_default=text("'manual'"))
+    created_at = mapped_column(DateTime(timezone=True), server_default=text("now()"))
+    updated_at = mapped_column(DateTime(timezone=True), server_default=text("now()"))
+
+
+class Relation(Base):
+    __tablename__ = "relation"
+    __table_args__ = {"schema": "ontology"}
+    id = mapped_column(BigInteger, primary_key=True)
+    tenant_id = mapped_column(BigInteger)
+    src_entity_id = mapped_column(BigInteger)
+    dst_entity_id = mapped_column(BigInteger)
+    predicate = mapped_column(Text)
+    weight = mapped_column(Numeric(4, 2), server_default=text("1.00"))
+    attrs = mapped_column(JSONB, server_default=text("'{}'::jsonb"))
+    status = mapped_column(Text, server_default=text("'DRAFT'"))
+    source = mapped_column(Text, server_default=text("'manual'"))
+    created_at = mapped_column(DateTime(timezone=True), server_default=text("now()"))
+    updated_at = mapped_column(DateTime(timezone=True), server_default=text("now()"))
+
+
+class Alias(Base):
+    __tablename__ = "alias"
+    __table_args__ = {"schema": "ontology"}
+    id = mapped_column(BigInteger, primary_key=True)
+    tenant_id = mapped_column(BigInteger)
+    entity_id = mapped_column(BigInteger)
+    alias = mapped_column(String(160))
+    confidence = mapped_column(Text, server_default=text("'HIGH'"))
+    status = mapped_column(Text, server_default=text("'DRAFT'"))
+    source = mapped_column(Text, server_default=text("'manual'"))
+    created_at = mapped_column(DateTime(timezone=True), server_default=text("now()"))
+    updated_at = mapped_column(DateTime(timezone=True), server_default=text("now()"))
+
+
+class EntityTag(Base):
+    __tablename__ = "entity_tag"
+    __table_args__ = {"schema": "ontology"}
+    id = mapped_column(BigInteger, primary_key=True)
+    tenant_id = mapped_column(BigInteger)
+    entity_id = mapped_column(BigInteger)
+    tag = mapped_column(String(32))
+    value = mapped_column(String(96))
+    created_at = mapped_column(DateTime(timezone=True), server_default=text("now()"))
+
+
+class ChunkEntity(Base):
+    __tablename__ = "chunk_entity"
+    __table_args__ = {"schema": "ontology"}
+    id = mapped_column(BigInteger, primary_key=True)
+    tenant_id = mapped_column(BigInteger)
+    document_id = mapped_column(String(48))
+    version = mapped_column(Integer)
+    chunk_ord = mapped_column(Integer)
+    chunk_id = mapped_column(BigInteger)
+    entity_id = mapped_column(BigInteger)
+    method = mapped_column(Text, server_default=text("'manual'"))
+    confidence = mapped_column(Text, server_default=text("'HIGH'"))
+    status = mapped_column(Text, server_default=text("'DRAFT'"))
+    created_at = mapped_column(DateTime(timezone=True), server_default=text("now()"))
+
+
+class PendingAction(Base):
+    __tablename__ = "pending_action"
+    __table_args__ = {"schema": "assistant"}
+    id = mapped_column(BigInteger, primary_key=True)
+    tenant_id = mapped_column(BigInteger)
+    conversation_id = mapped_column(BigInteger)
+    message_id = mapped_column(BigInteger)
+    action_key = mapped_column(String(64))
+    tool_name = mapped_column(String(64))
+    args = mapped_column(JSONB, server_default=text("'{}'::jsonb"))
+    summary = mapped_column(Text)
+    impact = mapped_column(Text)
+    irreversible = mapped_column(Boolean, server_default=text("true"))
+    status = mapped_column(Text, server_default=text("'PROPOSED'"))
+    expires_at = mapped_column(DateTime(timezone=True))
+    confirmed_at = mapped_column(DateTime(timezone=True))
+    executed_at = mapped_column(DateTime(timezone=True))
+    result = mapped_column(JSONB)
+    error_code = mapped_column(String(64))
+    created_at = mapped_column(DateTime(timezone=True), server_default=text("now()"))
+    updated_at = mapped_column(DateTime(timezone=True), server_default=text("now()"))
+
+
+class ToolCall(Base):
+    __tablename__ = "tool_call"
+    __table_args__ = {"schema": "assistant"}
+    id = mapped_column(BigInteger, primary_key=True)
+    tenant_id = mapped_column(BigInteger)
+    message_id = mapped_column(BigInteger)
+    conversation_id = mapped_column(BigInteger)
+    tool_name = mapped_column(String(64))
+    args = mapped_column(JSONB, server_default=text("'{}'::jsonb"))
+    status = mapped_column(Text, server_default=text("'OK'"))
+    latency_ms = mapped_column(Integer)
+    error_code = mapped_column(String(64))
+    proposal_id = mapped_column(BigInteger)
+    created_at = mapped_column(DateTime(timezone=True), server_default=text("now()"))
+

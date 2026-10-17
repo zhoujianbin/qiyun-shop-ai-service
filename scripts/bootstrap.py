@@ -49,6 +49,13 @@ PERMISSIONS = [
     ("ai:handoff:read", "查看转人工队列", "ai"),
     ("ai:handoff:write", "接单与关闭转人工", "ai"),
     ("ai:trace:read", "查看问答链路留痕", "ai"),
+    ("tool:read", "触发只读工具", "tool"),
+    ("tool:write:order", "触发订单写工具", "tool"),
+    ("tool:write:aftersales", "触发售后写工具", "tool"),
+    ("tool:admin", "维护工具开关与查看评测报告", "tool"),
+    ("ontology:read", "查看本体实体与关系", "ontology"),
+    ("ontology:write", "维护本体实体与关系", "ontology"),
+    ("ontology:review", "审核本体导入候选", "ontology"),
 ]
 
 ROLES = [
@@ -74,19 +81,22 @@ ROLES = [
      ["knowledge:document:read", "knowledge:document:write", "knowledge:document:import",
       "knowledge:document:archive", "knowledge:document:publish", "knowledge:document:rollback",
       "knowledge:rule:read", "knowledge:rule:write", "knowledge:review:read", "knowledge:review:write",
-      "knowledge:retrieval:test", "knowledge:governance:read"]),
+      "knowledge:retrieval:test", "knowledge:governance:read",
+      "ontology:read", "ontology:write", "ontology:review"]),
     ("KNOWLEDGE_REVIEWER", "知识审核员", "读、审核、批注、发布",
      ["knowledge:document:read", "knowledge:document:publish", "knowledge:review:read",
-      "knowledge:review:write", "knowledge:rule:read", "knowledge:governance:read"]),
+      "knowledge:review:write", "knowledge:rule:read", "knowledge:governance:read",
+      "ontology:read", "ontology:review"]),
     ("KNOWLEDGE_EDITOR", "内容运营", "读、编辑、提交审核、导入",
-     ["knowledge:document:read", "knowledge:document:write", "knowledge:document:import"]),
+     ["knowledge:document:read", "knowledge:document:write", "knowledge:document:import",
+      "ontology:read"]),
     ("CS_AGENT", "普通客服", "只读知识文档，供三期问答使用",
      ["knowledge:document:read"]),
-    ("AI_AGENT", "智能客服坐席", "会话读写、转人工接单",
-     ["ai:chat:read", "ai:chat:write", "ai:handoff:read", "ai:handoff:write"]),
-    ("AI_SUPERVISOR", "智能客服主管", "坐席全部权限 + 问答留痕",
+    ("AI_AGENT", "智能客服坐席", "会话读写、转人工接单、只读工具",
+     ["ai:chat:read", "ai:chat:write", "ai:handoff:read", "ai:handoff:write", "tool:read"]),
+    ("AI_SUPERVISOR", "智能客服主管", "坐席全部权限 + 问答留痕 + 写工具",
      ["ai:chat:read", "ai:chat:write", "ai:handoff:read", "ai:handoff:write", "ai:trace:read",
-      "knowledge:document:read"]),
+      "knowledge:document:read", "tool:read", "tool:write:order", "tool:write:aftersales"]),
 ]
 
 CHANNELS = [

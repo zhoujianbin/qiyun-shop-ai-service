@@ -129,7 +129,7 @@ def main() -> int:
         with psycopg.connect(dsn_for(parts, target)) as conn:
             total = conn.execute(
                 "SELECT count(*) FROM information_schema.tables"
-                " WHERE table_schema IN ('shared','commerce','knowledge','assistant')"
+                " WHERE table_schema IN ('shared','commerce','knowledge','assistant','ontology')"
                 " AND table_type = 'BASE TABLE'"
             ).fetchone()[0]
             print(f"done: executed={executed} skipped={skipped} base_tables={total}")
