@@ -126,6 +126,7 @@ class State:
     guard_hints: list[str] = field(default_factory=list)
     prompt_messages: list[dict] = field(default_factory=list)
     conversation_id: int | None = None                   # 四期：核验门禁需要会话上下文
+    tool_stream: bool = False                            # 四期：工具分支交给流式执行
     pending_action: dict | None = None                   # 四期：待确认动作（写工具）
     facts: list[dict] = field(default_factory=list)      # 四期：工具返回的事实块
     tool_calls: list[dict] = field(default_factory=list) # 四期：工具调用留痕（落 tool_call 表）
@@ -288,59 +289,93 @@ TOOL_SYSTEM_PROMPT = (
 )
 
 
-def tool_loop(db: Session, state: State, *, actor: dict | None, identity_level: str,
-              history: list[dict], max_calls: int = 3, permissions: set[str] | None = None,
-              conversation: object | None = None, message_id: int | None = None) -> State:
-    """工具分支：模型选工具 → 参数校验 → 核验门禁 → 执行 → 事实回填。
+def _call_parts(call: dict) -> tuple[str | None, str | None, str | None]:
+    """兼容两种形状：流式事件是扁平的，complete() 是 OpenAI 嵌套的。"""
+    function = call.get("function") or {}
+    name = function.get("name") or call.get("name")
+    raw = function.get("arguments")
+    if raw is None:
+        raw = call.get("arguments")
+    return call.get("id"), name, raw
 
-    写工具只生成待确认动作（不执行），且要求对应 tool:write:* 能力码。
-    """
+
+def _assistant_tool_message(calls: list[dict]) -> dict:
+    shaped = []
+    for call in calls:
+        call_id, name, raw = _call_parts(call)
+        shaped.append({"id": call_id, "type": "function",
+                       "function": {"name": name, "arguments": raw or "{}"}})
+    return {"role": "assistant", "content": "", "tool_calls": shaped}
+
+
+def _round_stream(messages: list[dict], schemas: list[dict]) -> tuple[str, list[dict], str | None]:
+    """跑一轮带 tools 的流式调用：累积 tool_calls，返回 (叙述文本, 工具调用, finish_reason)。"""
     from app.integrations import llm
 
+    content: list[str] = []
+    calls: list[dict] = []
+    finish: str | None = None
+    for kind, payload in llm.stream_events(messages, tools=schemas):
+        if kind == "content":
+            content.append(payload.get("text") or "")
+        elif kind == "tool_call":
+            calls.append(payload)
+        elif kind == "finish":
+            finish = payload.get("reason")
+    return "".join(content), calls, finish
+
+
+def stream_tool_answer(db: Session, state: State, *, actor: dict | None, identity_level: str,
+                       history: list[dict], permissions: set[str] | None = None,
+                       conversation: object | None = None, message_id: int | None = None,
+                       max_calls: int = 3):
+    """单段流式工具分支：产出 ("text", 文本) 与 ("tool", 状态) 两类事件。
+
+    B2 语义：带 tools 的轮次里叙述先缓冲，工具事件先发，缓冲叙述随后下发；
+    纯文本轮次则边收边发。
+    """
     permissions = permissions or set()
     allow_write = bool(permissions & set(action_service.WRITE_TOOL_PERMISSION.values()))
     schemas = tool_registry.llm_tools(include_write=allow_write)
     messages = [{"role": "system", "content": TOOL_SYSTEM_PROMPT}, *history,
                 {"role": "user", "content": state.question}]
-    calls = 0
-    while calls < max_calls:
-        try:
-            response = llm.complete(messages, tools=schemas)
-        except Exception as exc:  # noqa: BLE001 - 模型不可用按无工具处理
-            logger.warning("工具决策失败，退回知识检索：%s", exc)
-            state.degraded = True
-            return state
-        tool_calls = response.get("tool_calls") or []
+    calls_used = 0
+    rounds = 0
+    while rounds <= max_calls:
+        rounds += 1
+        text, tool_calls, _finish = _round_stream(messages, schemas)
         if not tool_calls:
-            break
-        for call in tool_calls[:max_calls - calls]:
-            calls += 1
-            function = call.get("function") or {}
-            name = function.get("name")
+            if text:
+                yield ("text", text)
+            return
+        pending_messages: list[dict] = []
+        for call in tool_calls:
+            if calls_used >= max_calls:
+                break
+            calls_used += 1
+            call_id, name, raw_arguments = _call_parts(call)
             spec = TOOLS.get(name)
             started = time.monotonic()
             if spec is None or (not spec.read_only and not allow_write):
                 state.tool_calls.append({"tool_name": name or "unknown", "args": {},
-                                         "status": "REJECTED",
-                                         "error_code": "TOOL_NOT_ALLOWED",
+                                         "status": "REJECTED", "error_code": "TOOL_NOT_ALLOWED",
                                          "latency_ms": 0})
-                messages.append({"role": "assistant", "content": "",
-                                 "tool_calls": [call]})
-                messages.append({"role": "tool", "tool_call_id": call.get("id"),
-                                 "content": json.dumps({"error": "TOOL_NOT_ALLOWED"},
-                                                       ensure_ascii=False)})
+                yield ("tool", {"name": name, "status": "failed", "latency_ms": 0})
+                pending_messages.append({"role": "tool", "tool_call_id": call_id,
+                                         "content": json.dumps({"error": "TOOL_NOT_ALLOWED"},
+                                                               ensure_ascii=False)})
                 continue
             try:
                 args = tool_registry.validate_args(spec, tool_registry.parse_arguments(
-                    function.get("arguments")))
-            except Exception as exc:  # noqa: BLE001 - 参数非法只回错误，不执行
-                state.tool_calls.append({"tool_name": spec.name, "args": {},
-                                         "status": "REJECTED", "error_code": "VALIDATION_FAILED",
-                                         "latency_ms": int((time.monotonic() - started) * 1000)})
-                messages.append({"role": "assistant", "content": "", "tool_calls": [call]})
-                messages.append({"role": "tool", "tool_call_id": call.get("id"),
-                                 "content": json.dumps({"error": "VALIDATION_FAILED",
-                                                        "message": str(exc)}, ensure_ascii=False)})
+                    raw_arguments))
+            except Exception as exc:  # noqa: BLE001
+                state.tool_calls.append({"tool_name": spec.name, "args": {}, "status": "REJECTED",
+                                         "error_code": "VALIDATION_FAILED", "latency_ms": 0})
+                yield ("tool", {"name": spec.name, "status": "failed", "latency_ms": 0})
+                pending_messages.append({"role": "tool", "tool_call_id": call_id,
+                                         "content": json.dumps({"error": "VALIDATION_FAILED",
+                                                                "message": str(exc)},
+                                                               ensure_ascii=False)})
                 continue
             if spec.requires_identity:
                 verified = assistant_handoff.active_verification(db, state.conversation_id)                     if state.conversation_id else None
@@ -349,25 +384,28 @@ def tool_loop(db: Session, state: State, *, actor: dict | None, identity_level: 
                     state.tool_calls.append({"tool_name": spec.name, "args": args,
                                              "status": "REJECTED",
                                              "error_code": "IDENTITY_REQUIRED", "latency_ms": 0})
-                    return state
+                    yield ("tool", {"name": spec.name, "status": "failed", "latency_ms": 0})
+                    yield ("text", IDENTITY_REQUEST_TEXT)
+                    return
             if not spec.read_only:
                 needed = action_service.WRITE_TOOL_PERMISSION.get(spec.name)
                 if needed and needed not in permissions:
                     state.tool_calls.append({"tool_name": spec.name, "args": args,
                                              "status": "REJECTED", "error_code": "PERM_FORBIDDEN",
                                              "latency_ms": 0})
-                    return state
+                    yield ("tool", {"name": spec.name, "status": "failed", "latency_ms": 0})
+                    return
                 if conversation is None or message_id is None:
                     state.tool_calls.append({"tool_name": spec.name, "args": args,
                                              "status": "REJECTED", "error_code": "NO_CONTEXT",
                                              "latency_ms": 0})
-                    return state
+                    return
                 try:
                     snapshot = None
                     try:
                         found = tool_registry.resolve_order(db, actor or {}, args.get("order_no"))
                         snapshot = {"status": found.status, "order_no": found.order_no}
-                    except Exception:  # noqa: BLE001 - 快照失败不影响生成动作
+                    except Exception:  # noqa: BLE001
                         snapshot = None
                     state.pending_action = action_service.propose(
                         db, actor or {}, conversation=conversation, message_id=message_id,
@@ -378,34 +416,63 @@ def tool_loop(db: Session, state: State, *, actor: dict | None, identity_level: 
                                              "latency_ms": 0})
                     state.facts.append({"tool": spec.name, "ok": False, "error_code": exc.code,
                                         "message": exc.message})
-                    return state
+                    yield ("tool", {"name": spec.name, "status": "failed", "latency_ms": 0})
+                    return
                 state.tool_calls.append({"tool_name": spec.name, "args": args, "status": "OK",
                                          "error_code": None, "latency_ms": 0})
                 state.decision = "ACTION_PROPOSED"
-                return state
+                yield ("tool", {"name": spec.name, "status": "ok", "latency_ms": 0})
+                if text:
+                    yield ("text", text)
+                yield ("text", ACTION_PENDING_TEXT)
+                return
             try:
                 result = spec.run(db, {"question": state.question, "actor": actor,
                                        "identity_level": identity_level,
                                        "conversation_id": state.conversation_id}, args)
-            except Exception as exc:  # noqa: BLE001 - 业务拒绝要原样保留 code
-                code = getattr(exc, "code", "TOOL_FAILED")
+            except Exception as exc:  # noqa: BLE001
+                code = str(getattr(exc, "code", "TOOL_FAILED"))
+                latency = int((time.monotonic() - started) * 1000)
                 state.tool_calls.append({"tool_name": spec.name, "args": args,
-                                         "status": "FAILED", "error_code": str(code),
-                                         "latency_ms": int((time.monotonic() - started) * 1000)})
-                state.facts.append({"tool": spec.name, "ok": False, "error_code": str(code),
+                                         "status": "FAILED", "error_code": code,
+                                         "latency_ms": latency})
+                state.facts.append({"tool": spec.name, "ok": False, "error_code": code,
                                     "message": getattr(exc, "message", str(exc))})
-                messages.append({"role": "assistant", "content": "", "tool_calls": [call]})
-                messages.append({"role": "tool", "tool_call_id": call.get("id"),
-                                 "content": json.dumps({"error": str(code)}, ensure_ascii=False)})
+                yield ("tool", {"name": spec.name, "status": "failed", "latency_ms": latency})
+                pending_messages.append({"role": "tool", "tool_call_id": call_id,
+                                         "content": json.dumps({"error": code}, ensure_ascii=False)})
                 continue
             latency = int((time.monotonic() - started) * 1000)
             state.tool_calls.append({"tool_name": spec.name, "args": args, "status": "OK",
                                      "error_code": None, "latency_ms": latency})
             state.facts.append({"tool": spec.name, "ok": True,
                                 "facts": result.get("facts"), "note": result.get("note")})
-            messages.append({"role": "assistant", "content": "", "tool_calls": [call]})
-            messages.append({"role": "tool", "tool_call_id": call.get("id"),
-                             "content": json.dumps(result.get("facts"), ensure_ascii=False)})
+            yield ("tool", {"name": spec.name, "status": "ok", "latency_ms": latency})
+            pending_messages.append({"role": "tool", "tool_call_id": call_id,
+                                     "content": json.dumps(result.get("facts"),
+                                                           ensure_ascii=False)})
+        # 缓冲的叙述在工具事件之后下发
+        if text:
+            yield ("text", text)
+        messages.append(_assistant_tool_message(tool_calls))
+        messages.extend(pending_messages)
+        if state.tool_calls and all(call["status"] == "REJECTED" for call in state.tool_calls):
+            return
+    # 轮次用尽：不带工具收个尾
+    text, _calls, _finish = _round_stream(messages, [])
+    if text:
+        yield ("text", text)
+
+
+def tool_loop(db: Session, state: State, *, actor: dict | None, identity_level: str,
+              history: list[dict], max_calls: int = 3, permissions: set[str] | None = None,
+              conversation: object | None = None, message_id: int | None = None) -> State:
+    """非流式用法：把流式实现跑干（测试与内部调用共用同一套逻辑）。"""
+    for _kind, _payload in stream_tool_answer(
+            db, state, actor=actor, identity_level=identity_level, history=history,
+            permissions=permissions, conversation=conversation, message_id=message_id,
+            max_calls=max_calls):
+        pass
     return state
 
 
@@ -669,12 +736,18 @@ def finalize(db: Session, state: State, *, history: list[dict]) -> State:
 def run(db: Session, question: str, *, actor: dict | None, history: list[dict],
         identity_level: str = "public", conversation_id: int | None = None,
         permissions: set[str] | None = None, conversation: object | None = None,
-        message_id: int | None = None) -> State:
-    """跑一遍编排；返回最终 state（decision/citations/prompt_messages）。"""
+        message_id: int | None = None, defer_tools: bool = False) -> State:
+    """跑一遍编排；返回最终 state（decision/citations/prompt_messages）。
+
+    defer_tools=True 时把工具分支交给调用方的流式实现（SSE 路由用）。
+    """
     state = State(question=question, conversation_id=conversation_id)
     normalize(db, state)
     plan(state)
     if state.decision == "ANSWER" and state.plan and state.plan[0] == "tool":
+        if defer_tools:
+            state.tool_stream = True
+            return state
         tool_loop(db, state, actor=actor, identity_level=identity_level, history=history,
                   permissions=permissions, conversation=conversation, message_id=message_id)
         if state.decision in ("IDENTITY_REQUEST", "ACTION_PROPOSED") or state.facts:

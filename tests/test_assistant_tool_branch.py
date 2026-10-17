@@ -83,3 +83,30 @@ def test_write_tool_is_not_offered_and_rejected(scripted):
     assert state.tool_calls[0]["status"] == "REJECTED"
     assert state.tool_calls[0]["error_code"] == "TOOL_NOT_ALLOWED"
     assert state.facts == []
+
+def test_stream_emits_tool_event_before_delta_and_hides_tool_calls(client, monkeypatch):
+    """B2 回归：工具事件先于文本增量；tool_calls 原始结构永不出现在事件流里。"""
+    import json as _json
+
+    from tests.conftest import auth, customer_token, new_key
+
+    spec = tool_registry.TOOLS["query_product"]
+    monkeypatch.setattr(spec, "run", lambda db, state, args: {
+        "facts": {"products": [{"name": "栖云智能门锁 L3 Pro"}]}})
+    llm.get_provider().script([{"name": "query_product", "arguments": {"keyword": "门锁"}}])
+    token = customer_token(client)
+    conversation = client.post("/api/v1/ai/conversations", headers=auth(token, new_key()),
+                               json={}).json()
+    with client.stream("POST",
+                       f"/api/v1/ai/conversations/{conversation['id']}/messages:stream",
+                       headers=auth(token, new_key()),
+                       json={"content": "我订单到哪了"}) as response:
+        raw = "".join(response.iter_text())
+
+    names = [line[7:] for line in raw.splitlines() if line.startswith("event: ")]
+    assert "tool" in names, names
+    assert names.index("tool") < names.index("delta")
+    assert "tool_calls" not in raw and "arguments" not in raw
+    # 工具的事实最终进入消息
+    assert "正在查询" not in raw  # 我们不发这个占位文本，只发事件
+    llm.get_provider().script(None)

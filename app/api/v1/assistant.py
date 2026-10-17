@@ -46,6 +46,35 @@ def _sse(event: str, data: dict) -> str:
     return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
 
 
+def _iter_tagged(source: Iterator[tuple[str, str]], interval: float = HEARTBEAT_SECONDS):
+    """把 (kind, payload) 流包装成带心跳的流；kind ∈ text|tool|ping。"""
+    buffer: queue.Queue = queue.Queue()
+    sentinel = object()
+
+    def worker() -> None:
+        try:
+            for item in source:
+                buffer.put(item)
+        except Exception as exc:  # noqa: BLE001 - 交给主循环转成 error 事件
+            buffer.put(exc)
+        finally:
+            buffer.put(sentinel)
+
+    thread = threading.Thread(target=worker, daemon=True)
+    thread.start()
+    while True:
+        try:
+            item = buffer.get(timeout=interval)
+        except queue.Empty:
+            yield ("ping", {})
+            continue
+        if item is sentinel:
+            return
+        if isinstance(item, Exception):
+            raise item
+        yield item
+
+
 def _iter_with_heartbeat(source: Iterator[str], interval: float = HEARTBEAT_SECONDS) -> Iterator[tuple[str, str]]:
     """把阻塞式生成器包装成 (kind, text) 流，空闲时按间隔产出心跳。"""
     buffer: queue.Queue = queue.Queue()
@@ -178,7 +207,7 @@ def stream_message(conversation_id: int, payload: StreamRequest, request: Reques
                                 identity_level=effective_level,
                                 conversation_id=conversation_id,
                                 permissions=permissions, conversation=conversation,
-                                message_id=answer.id)
+                                message_id=answer.id, defer_tools=True)
 
     # 自动转人工：高风险规则命中 / 同一问题第二次仍无命中
     if state.guard_hints:
@@ -201,34 +230,39 @@ def stream_message(conversation_id: int, payload: StreamRequest, request: Reques
                 db, actor, conversation, reason="NO_HIT", summary="连续两次检索无命中")
     db.commit()
 
-    def responder() -> Iterator[str]:
+    def responder():
+        if state.tool_stream:
+            yield from assistant_graph.stream_tool_answer(
+                db, state, actor=actor, identity_level=effective_level, history=history[:-1],
+                permissions=permissions, conversation=conversation, message_id=answer.id)
+            return
         if state.decision != "ANSWER":
             text = assistant_graph.fixed_answer(state)
             for index in range(0, len(text), 8):
-                yield text[index:index + 8]
+                yield ("text", text[index:index + 8])
             return
-        yield from llm.stream_chat(state.prompt_messages)
+        for chunk in llm.stream_chat(state.prompt_messages):
+            yield ("text", chunk)
 
     def events() -> Iterator[str]:
         yield _sse("meta", {"conversation_id": conversation_id, "message_id": answer.id,
                             "seq": answer.seq, "decision": state.decision,
                             "intent": state.intent})
-        # 四期：工具状态先于任何文本增量，前端据此显示"正在查询…"
-        for call in state.tool_calls or []:
-            yield _sse("tool", {"name": call.get("tool_name"),
-                                "status": "failed" if call.get("status") != "OK" else "ok",
-                                "latency_ms": call.get("latency_ms")})
         collected: list[str] = []
         last_flush = time.monotonic()
         try:
-            for kind, text in _iter_with_heartbeat(responder()):
+            for kind, payload in _iter_tagged(responder()):
                 if kind == "ping":
                     yield _sse("ping", {})
                     continue
-                collected.append(text)
+                if kind == "tool":
+                    # 工具状态先于任何文本增量；tool_calls 原始结构永不下发
+                    yield _sse("tool", payload)
+                    continue
+                collected.append(payload)
                 # 内存缓冲实时内容，供客服工作台轮询看到流式过程（不写库，避免占用额外连接）
                 _LIVE[answer.id] = "".join(collected)
-                yield _sse("delta", {"text": text})
+                yield _sse("delta", {"text": payload})
         except Exception as exc:  # noqa: BLE001
             assistant_handoff.create_handoff(
                 db, actor, conversation, reason="MODEL_ERROR", summary=str(exc)[:200])
