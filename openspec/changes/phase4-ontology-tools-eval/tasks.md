@@ -54,9 +54,9 @@
 ## 7 核验门禁与 F21
 
 - [x] 7.1 工具节点前置检查 `active_verification(conversation_id)` + `order_no` 精确匹配；验证：`F1`、`F2`、`F3`
-- [ ] 7.2 写工具在 confirm 时再校验 `expires_at`；验证：`F3` + 过期写拒绝
-- [ ] 7.3 **F21 修复**：`identity_level` 由服务端推导（VERIFIED→customer / 员工权限→agent / 否则 public），忽略客户端入参；验证：`F4`（一票否决）、`F5`
-- [ ] 7.4 3 次失败锁 → `IDENTITY_FAILED` 转人工沿用；验证：`F6`
+- [x] 7.2 写工具在 confirm 时再校验 `expires_at`；验证：`F3` + 过期写拒绝
+- [x] 7.3 **F21 修复**：`identity_level` 由服务端推导（VERIFIED→customer / 员工权限→agent / 否则 public），忽略客户端入参；验证：`F4`（一票否决）、`F5`
+- [x] 7.4 3 次失败锁 → `IDENTITY_FAILED` 转人工沿用；验证：`F6`
 
 ## 8 流式事件与前端
 

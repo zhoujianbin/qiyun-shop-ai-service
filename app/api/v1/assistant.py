@@ -168,8 +168,14 @@ def stream_message(conversation_id: int, payload: StreamRequest, request: Reques
     history = conversation_service.context_messages(db, conversation_id)
     started = time.monotonic()
     permissions = request_permissions(request, db, user)
+    # 四期 F21：身份等级由服务端推导，忽略客户端传入值（否则任何人传 "agent" 就能读内部切片）
+    effective_level = "public"
+    if "ai:chat:read" in permissions:
+        effective_level = "agent"
+    elif assistant_handoff.active_verification(db, conversation_id) is not None:
+        effective_level = "customer"
     state = assistant_graph.run(db, content, actor=actor, history=history[:-1],
-                                identity_level=payload.identity_level,
+                                identity_level=effective_level,
                                 conversation_id=conversation_id,
                                 permissions=permissions, conversation=conversation,
                                 message_id=answer.id)

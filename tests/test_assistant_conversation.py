@@ -184,3 +184,22 @@ def test_empty_conversation_is_hidden_from_list(client):
     after = client.get("/api/v1/ai/conversations", headers=auth(token, new_key())).json()
     assert after["total"] == before, "空会话不得出现在列表"
     assert all(item["id"] != created["id"] for item in after["items"])
+
+def test_client_cannot_raise_identity_level(client, monkeypatch):
+    """F21 回归：客户端自报 agent 级无效，服务端只按 public 检索。"""
+    from app.services import knowledge_retrieval
+
+    captured = {}
+
+    def fake_search(db, query, **kwargs):
+        captured["identity_level"] = kwargs.get("identity_level")
+        return {"hits": [], "debug": {"latency_ms": 1, "vector_score": {}, "text_score": {},
+                                      "fused_score": {}, "candidates": 0}}
+
+    monkeypatch.setattr(knowledge_retrieval, "search", fake_search)
+    token = customer_token(client)
+    conversation = _create(client, token)
+    body = {"content": "门锁没电了怎么办", "identity_level": "agent"}
+    client.post(f"/api/v1/ai/conversations/{conversation['id']}/messages:stream",
+                headers=auth(token, new_key()), json=body)
+    assert captured["identity_level"] == "public"
