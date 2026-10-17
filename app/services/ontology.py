@@ -303,6 +303,10 @@ def _product_scope_of(db: Session, entity: Entity, tags: dict[int, dict[str, str
         return tag
     if entity.kind == "product":
         return entity.code
+    if entity.kind == "fault":
+        product_code = (entity.attrs or {}).get("product")
+        if product_code:
+            return str(product_code)
     if entity.kind in ("part", "accessory"):
         for src_id, dst_id, src_code, dst_code in one_hop:
             if src_id == entity.id and dst_code and dst_code:
@@ -360,9 +364,11 @@ def normalize_question(db: Session, question: str, *, max_entities: int = 3) -> 
                for r in neighbors]
 
     product_scope = None
-    by_id = {item["id"]: item for item in matched}
+    rows = {e.id: e for e in db.execute(select(Entity).where(Entity.id.in_(ids))).scalars().all()}
     for item in matched:
-        entity = Entity(id=item["id"], code=item["code"], kind=item["kind"], name=item["name"])
+        entity = rows.get(item["id"])
+        if entity is None:
+            continue
         scope = _product_scope_of(db, entity, tags, one_hop)
         if scope:
             product_scope = scope

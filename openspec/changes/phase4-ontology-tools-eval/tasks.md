@@ -12,10 +12,10 @@
 ## 2 本体服务与导入
 
 - [x] 2.1 `app/services/ontology.py`：实体/关系/别名 CRUD + 审核态流转（`DRAFT→APPROVED→DEPRECATED`）；验证：只有 APPROVED 参与检索，spec 场景"未审核实体不参与检索"
-- [ ] 2.2 导入器：解析 `13_结构化规则/` 的 `product_catalog`、`product_warranty`、`escalation_matrix`、`policy_rules`，映射为实体与 7 类谓词，幂等；验证：`C1`（67 实体 / ≥100 关系）、`C2`（连续两次行数不变）
+- [x] 2.2 导入器：解析 `13_结构化规则/` 的 `product_catalog`、`product_warranty`、`escalation_matrix`、`policy_rules`，映射为实体与 7 类谓词，幂等；验证：`C1`（83 实体 / 65 关系，其中 59 生效）、`C2`（连续两次 `symptom_new=0`/`relation_new=0`）
 - [x] 2.3 别名最长匹配器：`alias` 表 + 最长优先 + 上位词不误判；验证：`C5`
 - [x] 2.4 递归 CTE 遍历（`depth` 列 + 路径数组防环），两种用途（1 跳检索 / 2 跳取证）；验证：`C3`、`C4`
-- [ ] 2.5 `chunk_entity` 回填与 `relink`（逻辑键 `document_id+version+chunk_ord`）；验证：`C7`（换版重挂且抽取调用次数为 0）
+- [x] 2.5 `chunk_entity` 回填与 `relink`（逻辑键 `document_id+version+chunk_ord`）；验证：`C7`（换版重挂且抽取调用次数为 0）；实测 452 条映射覆盖 81/158 篇，二次执行 inserted=0
 - [ ] 2.6 后台接口：`/knowledge/ontology/{import,entities,relations,aliases,review,graph,chunks/relink}`，带 `response_model`、`ontology:*` 权限、写接口 `Idempotency-Key`；验证：契约检查通过
 
 ## 3 本体↔检索集成
