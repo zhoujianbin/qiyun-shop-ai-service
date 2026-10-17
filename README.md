@@ -202,7 +202,7 @@ qiyun-shop-ai-service/
 │   └── public/       商品 WebP 图片（products/）与首页 Banner（banners/），见「商品图片」
 ├── docs/             一/二/三/四期文档 + 知识库校验工具与报告（开发侧，不参与导入）
 ├── openspec/         spec-driven 变更管理：specs/（11 个能力）+ changes/archive/
-├── knowledge_raw/    企业知识库原始文档（152 个 Markdown + 结构化规则 yaml，按业务域分 15 个目录）
+├── knowledge_raw/    企业知识库原始文档（146 个 Markdown + 结构化规则 yaml，按业务域分 15 个目录）
 └── LICENSE           MIT
 ```
 
@@ -232,15 +232,15 @@ qiyun-shop-ai-service/
 
 ### knowledge_raw/（企业知识库原始文档）
 
-栖云智家企业知识库的原始 Markdown，152 个文件 + 11 份结构化规则 yaml，按 15 个业务域目录组织（校验类开发文档已移出至 `docs/知识库校验/`）：
+栖云智家企业知识库的原始 Markdown，146 个文件 + 11 份结构化规则 yaml，按 15 个业务域目录组织（校验类开发文档已移出至 `docs/知识库校验/`，治理类文档不随仓库分发）：
 
     00_企业基础  01_产品知识  02_订单支付与发票  03_物流与履约  04_安装与交付
     05_退换货与退款  06_保修维修与备件  07_账户设备与家庭共享  08_云服务与订阅
     09_客服SOP  10_工单投诉与升级  11_隐私安全与高风险场景  12_场景案例
     13_结构化规则  14_主题手册
 
-每篇文档带 `document_id`、`version`、`owner` 等元信息；`SOURCE_OF_TRUTH.md` 定义真源优先级与冲突处理，
-`AGENTS.md` / `CLAUDE.md` 定义 AI Agent 的检索与回答规则。商品主档（`01_产品知识/`）是 `scripts/bootstrap.py`
+每篇文档带 `document_id`、`version`、`owner` 等元信息。真源优先级、文档分级与 Agent 规则属内部治理文档，
+不随仓库分发（本地保存在 `.private/knowledge-governance/`）。商品主档（`01_产品知识/`）是 `scripts/bootstrap.py`
 中商品、SKU 与规格参数的来源；`13_结构化规则/` 是四期本体（产品/部件/故障/政策）的导入源。
 
 ## 商品图片

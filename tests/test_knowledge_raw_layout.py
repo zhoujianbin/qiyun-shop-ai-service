@@ -1,8 +1,9 @@
-"""知识库目录边界：开发侧的校验工具与报告不得混入企业知识库。
+"""知识库目录边界：开发侧与治理类文档不得混入企业知识库。
 
-背景：`knowledge_raw/99_校验与维护/` 曾被打包导入，6 篇治理文档以 public 身份进了检索，
-其中《知识库校验报告》被真实客户会话引用过。该目录已移到 `docs/知识库校验/`。
-本测试守住这条边界，防止后续"顺手放回来"。
+背景：`knowledge_raw/99_校验与维护/` 曾被打包导入，6 篇校验文档以 public 身份进了检索，
+其中《知识库校验报告》被真实客户会话引用过。该目录已移到 `docs/知识库校验/`；
+另有 6 篇治理/Agent 规则文档（SOURCE_OF_TRUTH、AGENTS、CLAUDE 等）移出仓库，
+本地保存在 `.private/knowledge-governance/`。本测试守住这条边界。
 """
 import pathlib
 import re
@@ -11,6 +12,9 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 RAW = ROOT / "knowledge_raw"
 
 FRONT_MATTER_RE = re.compile(r"^---\n(.*?)\n---\n", re.S)
+
+# 这些分类是治理/开发规则，不是给客户看的知识
+DEV_CATEGORIES = {"knowledge_governance", "agent_policy", "governance", "retrieval_governance", "system_boundary"}
 
 
 def _front_matter(path: pathlib.Path) -> dict[str, str]:
@@ -41,6 +45,6 @@ def test_no_governance_category_documents():
     offenders = []
     for path in RAW.rglob("*.md"):
         meta = _front_matter(path)
-        if meta.get("category") == "knowledge_governance":
+        if meta.get("category") in DEV_CATEGORIES:
             offenders.append(f"{path.relative_to(ROOT)}({meta.get('category')})")
     assert not offenders, f"开发/治理类文档不应纳入企业知识库：{offenders}"

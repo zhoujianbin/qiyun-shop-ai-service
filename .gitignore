@@ -10,9 +10,11 @@ web/dist/
 *.egg-info/
 
 # 不随仓库分发的本地材料
+# - .private/ 内部治理文档（真源规则、Agent 规则、文档分级等）
 # - docs/handover/ 含交接用 .env（数据库口令）
 # - docs/ppt/ 为本地讲义大纲
 # - .dsh/ 为本地会话目录
+.private/
 docs/handover/
 docs/ppt/
 .dsh/

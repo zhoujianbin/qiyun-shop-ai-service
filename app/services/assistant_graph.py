@@ -247,7 +247,7 @@ def normalize(db: Session, state: State) -> State:
 def _filters(db: Session, state: State) -> dict | None:
     """只在二期文档对该产品范围确有覆盖时才加过滤。
 
-    实测二期 152 篇文档的 product_scope 全为 NULL，无条件过滤会把召回打成 0；
+    实测二期 146 篇文档的 product_scope 全为 NULL，无条件过滤会把召回打成 0；
     因此这里做覆盖守卫，未覆盖时检索行为与三期完全一致。
     """
     if not state.product_scope:
