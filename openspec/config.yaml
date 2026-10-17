@@ -1,0 +1,29 @@
+schema: spec-driven
+
+context: |
+  项目：栖云智家 第一期 · 企业电商基础平台（Python FastAPI + SQLAlchemy 2.0 + PostgreSQL 17/pgvector；前端 React 18 + Ant Design 5）。
+  语言：所有 OpenSpec 产物（proposal、design、specs、tasks 及归档说明）一律使用中文撰写；代码、命令、API 路径、字段名、表名保持英文原样。
+  范围：第一期只做电商基础平台（商品、库存、客户、购物车、订单、支付、履约物流、售后、退款、发票、组织权限、渠道范围、审计、报表），不含知识库 / RAG / 本体 / 工具调用，仅保留扩展点。
+  契约：任何改动后端接口时，必须同步更新 openapi.json / openapi.yaml（python scripts/export_openapi.py）并通过 python scripts/check_frontend_contract.py；测试用 python -m pytest -q。
+
+# Per-artifact rules (optional)
+# Add custom rules for specific artifacts.
+# Example:
+#   rules:
+#     proposal:
+#       - Keep proposals under 500 words
+#       - Always state what is out of scope
+#     tasks:
+#       - Break tasks into chunks of max 2 hours
+
+# Per-operation guidance (optional)
+# Add advisory guidance for how apply and archive work should be conducted.
+# This is separate from artifact rules above.
+# Example:
+#   operations:
+#     apply:
+#       guidance:
+#         - Keep test summaries concise
+#     archive:
+#       guidance:
+#         - Summarize the archive outcome before finishing

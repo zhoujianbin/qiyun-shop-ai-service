@@ -42,4 +42,13 @@ export const ROUTES = {
   adminAudit: '/admin/audit',
   adminReports: '/admin/reports',
   adminForbidden: '/admin/403',
+
+  // 二期：知识库
+  knowledgeOverview: '/admin/knowledge',
+  knowledgeDocuments: '/admin/knowledge/documents',
+  knowledgeDocument: (id: number | string) => `/admin/knowledge/documents/${id}`,
+  knowledgeEditor: '/admin/knowledge/editor',
+  knowledgeReview: '/admin/knowledge/review',
+  knowledgeRetrieval: '/admin/knowledge/retrieval-test',
+  knowledgeGovernance: '/admin/knowledge/governance',
 } as const;

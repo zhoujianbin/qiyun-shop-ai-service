@@ -5,6 +5,7 @@ from decimal import Decimal
 from sqlalchemy import (
     BigInteger, Boolean, Date, DateTime, Integer, Interval, Numeric, SmallInteger, String, Text, text,
 )
+from pgvector.sqlalchemy import Vector
 from sqlalchemy.dialects.postgresql import INET, JSONB, UUID
 from sqlalchemy.orm import DeclarativeBase, mapped_column
 
@@ -767,4 +768,182 @@ class Invoice(Base):
     created_at = mapped_column(DateTime(timezone=True), server_default=text("now()"))
     updated_at = mapped_column(DateTime(timezone=True), server_default=text("now()"))
     version = mapped_column(Integer, server_default=text("0"))
+
+
+class Document(Base):
+    __tablename__ = "document"
+    __table_args__ = {"schema": "knowledge"}
+    id = mapped_column(BigInteger, primary_key=True)
+    tenant_id = mapped_column(BigInteger)
+    document_id = mapped_column(String(48))
+    title = mapped_column(String(200))
+    category = mapped_column(String(48))
+    owner = mapped_column(String(64))
+    status = mapped_column(Text, server_default=text("'DRAFT'"))
+    current_version = mapped_column(Integer)
+    product_scope = mapped_column(String(64))
+    channel_scope = mapped_column(JSONB, server_default=text("'[]'::jsonb"))
+    identity_level = mapped_column(Text, server_default=text("'public'"))
+    effective_date = mapped_column(Date)
+    metadata_json = mapped_column("metadata", JSONB, server_default=text("'{}'::jsonb"))
+    created_at = mapped_column(DateTime(timezone=True), server_default=text("now()"))
+    updated_at = mapped_column(DateTime(timezone=True), server_default=text("now()"))
+
+
+class DocumentVersion(Base):
+    __tablename__ = "document_version"
+    __table_args__ = {"schema": "knowledge"}
+    id = mapped_column(BigInteger, primary_key=True)
+    tenant_id = mapped_column(BigInteger)
+    document_pk = mapped_column(BigInteger)
+    version = mapped_column(Integer)
+    content_md = mapped_column(Text)
+    checksum = mapped_column(String(64))
+    effective_from = mapped_column(DateTime(timezone=True))
+    effective_until = mapped_column(DateTime(timezone=True))
+    status = mapped_column(Text, server_default=text("'DRAFT'"))
+    change_summary = mapped_column(Text)
+    source_kind = mapped_column(Text, server_default=text("'MANUAL'"))
+    published_at = mapped_column(DateTime(timezone=True))
+    published_by = mapped_column(BigInteger)
+    created_by = mapped_column(BigInteger)
+    created_at = mapped_column(DateTime(timezone=True), server_default=text("now()"))
+
+
+class Chunk(Base):
+    __tablename__ = "chunk"
+    __table_args__ = {"schema": "knowledge"}
+    id = mapped_column(BigInteger, primary_key=True)
+    tenant_id = mapped_column(BigInteger)
+    document_version_id = mapped_column(BigInteger)
+    ord = mapped_column(Integer)
+    title_path = mapped_column(String(512))
+    content = mapped_column(Text)
+    token_count = mapped_column(Integer)
+    embedding = mapped_column(Vector(512))
+    embedding_status = mapped_column(Text, server_default=text("'PENDING'"))
+    identity_level = mapped_column(Text, server_default=text("'public'"))
+    metadata_json = mapped_column("metadata", JSONB, server_default=text("'{}'::jsonb"))
+    created_at = mapped_column(DateTime(timezone=True), server_default=text("now()"))
+
+
+class Rule(Base):
+    __tablename__ = "rule"
+    __table_args__ = {"schema": "knowledge"}
+    id = mapped_column(BigInteger, primary_key=True)
+    tenant_id = mapped_column(BigInteger)
+    rule_id = mapped_column(String(48))
+    source_kind = mapped_column(Text, server_default=text("'manual'"))
+    condition = mapped_column(JSONB, server_default=text("'{}'::jsonb"))
+    action = mapped_column(JSONB, server_default=text("'{}'::jsonb"))
+    forbid = mapped_column(JSONB, server_default=text("'[]'::jsonb"))
+    priority = mapped_column(Integer, server_default=text("100"))
+    status = mapped_column(Text, server_default=text("'DRAFT'"))
+    effective_from = mapped_column(DateTime(timezone=True))
+    effective_until = mapped_column(DateTime(timezone=True))
+    conflict_group = mapped_column(String(48))
+    source_file = mapped_column(String(255))
+    source_line = mapped_column(Integer)
+    created_by = mapped_column(BigInteger)
+    created_at = mapped_column(DateTime(timezone=True), server_default=text("now()"))
+    updated_at = mapped_column(DateTime(timezone=True), server_default=text("now()"))
+
+
+class RuleConflict(Base):
+    __tablename__ = "rule_conflict"
+    __table_args__ = {"schema": "knowledge"}
+    id = mapped_column(BigInteger, primary_key=True)
+    tenant_id = mapped_column(BigInteger)
+    rule_a_id = mapped_column(BigInteger)
+    rule_b_id = mapped_column(BigInteger)
+    conflict_type = mapped_column(String(48))
+    severity = mapped_column(Text, server_default=text("'WARN'"))
+    status = mapped_column(Text, server_default=text("'OPEN'"))
+    detail = mapped_column(JSONB, server_default=text("'{}'::jsonb"))
+    detected_at = mapped_column(DateTime(timezone=True), server_default=text("now()"))
+    resolved_by = mapped_column(BigInteger)
+    resolved_at = mapped_column(DateTime(timezone=True))
+
+
+class ReviewTask(Base):
+    __tablename__ = "review_task"
+    __table_args__ = {"schema": "knowledge"}
+    id = mapped_column(BigInteger, primary_key=True)
+    tenant_id = mapped_column(BigInteger)
+    document_version_id = mapped_column(BigInteger)
+    assignee_id = mapped_column(BigInteger)
+    status = mapped_column(Text, server_default=text("'PENDING'"))
+    due_at = mapped_column(DateTime(timezone=True))
+    decision = mapped_column(Text)
+    decided_at = mapped_column(DateTime(timezone=True))
+    note = mapped_column(Text)
+    self_review = mapped_column(Boolean, server_default=text("false"))
+    created_by = mapped_column(BigInteger)
+    created_at = mapped_column(DateTime(timezone=True), server_default=text("now()"))
+    updated_at = mapped_column(DateTime(timezone=True), server_default=text("now()"))
+
+
+class ReviewComment(Base):
+    __tablename__ = "review_comment"
+    __table_args__ = {"schema": "knowledge"}
+    id = mapped_column(BigInteger, primary_key=True)
+    tenant_id = mapped_column(BigInteger)
+    version_id = mapped_column(BigInteger)
+    task_id = mapped_column(BigInteger)
+    author_id = mapped_column(BigInteger)
+    anchor = mapped_column(JSONB, server_default=text("'{}'::jsonb"))
+    content = mapped_column(Text)
+    resolved = mapped_column(Boolean, server_default=text("false"))
+    parent_id = mapped_column(BigInteger)
+    created_at = mapped_column(DateTime(timezone=True), server_default=text("now()"))
+
+
+class ImportJob(Base):
+    __tablename__ = "import_job"
+    __table_args__ = {"schema": "knowledge"}
+    id = mapped_column(BigInteger, primary_key=True)
+    tenant_id = mapped_column(BigInteger)
+    source_type = mapped_column(Text, server_default=text("'MD_BUNDLE'"))
+    file_name = mapped_column(String(255))
+    checksum = mapped_column(String(64))
+    status = mapped_column(Text, server_default=text("'PENDING'"))
+    total = mapped_column(Integer, server_default=text("0"))
+    succeeded = mapped_column(Integer, server_default=text("0"))
+    failed = mapped_column(Integer, server_default=text("0"))
+    skipped = mapped_column(Integer, server_default=text("0"))
+    errors = mapped_column(JSONB, server_default=text("'[]'::jsonb"))
+    idempotency_key = mapped_column(String(128))
+    created_by = mapped_column(BigInteger)
+    created_at = mapped_column(DateTime(timezone=True), server_default=text("now()"))
+    updated_at = mapped_column(DateTime(timezone=True), server_default=text("now()"))
+
+
+class RetrievalLog(Base):
+    __tablename__ = "retrieval_log"
+    __table_args__ = {"schema": "knowledge"}
+    id = mapped_column(BigInteger, primary_key=True)
+    tenant_id = mapped_column(BigInteger)
+    query = mapped_column(Text)
+    filters = mapped_column(JSONB, server_default=text("'{}'::jsonb"))
+    top_k = mapped_column(Integer)
+    hit_count = mapped_column(Integer, server_default=text("0"))
+    hits = mapped_column(JSONB, server_default=text("'[]'::jsonb"))
+    latency_ms = mapped_column(Integer)
+    actor_id = mapped_column(BigInteger)
+    identity_level = mapped_column(Text, server_default=text("'public'"))
+    kind = mapped_column(Text, server_default=text("'TEST'"))
+    created_at = mapped_column(DateTime(timezone=True), server_default=text("now()"))
+
+
+class SchemaMigration(Base):
+    __tablename__ = "schema_migration"
+    __table_args__ = {"schema": "shared"}
+    id = mapped_column(BigInteger, primary_key=True)
+    version = mapped_column(String(32))
+    file_name = mapped_column(String(255))
+    checksum = mapped_column(String(64))
+    applied_at = mapped_column(DateTime(timezone=True), server_default=text("now()"))
+    applied_by = mapped_column(String(64))
+    duration_ms = mapped_column(Integer)
+    success = mapped_column(Boolean, server_default=text("true"))
 

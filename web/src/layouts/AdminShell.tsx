@@ -15,6 +15,7 @@ import CustomerServiceOutlined from '@ant-design/icons/CustomerServiceOutlined';
 import DashboardOutlined from '@ant-design/icons/DashboardOutlined';
 import FileTextOutlined from '@ant-design/icons/FileTextOutlined';
 import InboxOutlined from '@ant-design/icons/InboxOutlined';
+import BookOutlined from '@ant-design/icons/BookOutlined';
 import MenuFoldOutlined from '@ant-design/icons/MenuFoldOutlined';
 import MenuUnfoldOutlined from '@ant-design/icons/MenuUnfoldOutlined';
 import ShopOutlined from '@ant-design/icons/ShopOutlined';
@@ -104,6 +105,19 @@ const MENU: MenuEntry[] = [
     children: [
       { key: ROUTES.adminReports, label: '报表工作台', permission: P.reportRead },
       { key: ROUTES.adminAudit, label: '审计日志', permission: P.auditRead },
+    ],
+  },
+  {
+    key: 'knowledge-group',
+    label: '知识库',
+    icon: <BookOutlined />,
+    children: [
+      { key: ROUTES.knowledgeOverview, label: '知识概览', permission: P.knowledgeDocumentRead },
+      { key: ROUTES.knowledgeDocuments, label: '文档管理', permission: P.knowledgeDocumentRead },
+      { key: ROUTES.knowledgeEditor, label: '文档编辑', permission: P.knowledgeDocumentWrite },
+      { key: ROUTES.knowledgeReview, label: '审核队列', permission: P.knowledgeReviewRead },
+      { key: ROUTES.knowledgeRetrieval, label: '检索测试', permission: P.knowledgeRetrievalTest },
+      { key: ROUTES.knowledgeGovernance, label: '治理看板', permission: P.knowledgeGovernanceRead },
     ],
   },
 ];

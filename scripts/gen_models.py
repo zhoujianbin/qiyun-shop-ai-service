@@ -31,7 +31,12 @@ TYPE_MAP = [
     (r"^inet$", "INET"),
     (r"^uuid$", "UUID"),
     (r"^interval$", "Interval"),
+    (r"^vector\((\d+)\)", "Vector"),
 ]
+
+
+# 与 SQLAlchemy Declarative 冲突的属性名：属性改名，列名保持不变
+RESERVED_ATTRS = {"metadata": "metadata_json"}
 
 
 def map_type(raw: str) -> str:
@@ -94,6 +99,7 @@ def main() -> None:
         "from sqlalchemy import (",
         "    BigInteger, Boolean, Date, DateTime, Integer, Interval, Numeric, SmallInteger, String, Text, text,",
         ")",
+        "from pgvector.sqlalchemy import Vector",
         "from sqlalchemy.dialects.postgresql import INET, JSONB, UUID",
         "from sqlalchemy.orm import DeclarativeBase, mapped_column",
         "",
@@ -106,7 +112,7 @@ def main() -> None:
     blocks = []
     for m in re.finditer(r"CREATE TABLE\s+(\w+)\.(\w+)\s*\(", ddl):
         schema, table = m.group(1), m.group(2)
-        if schema not in ("shared", "commerce"):
+        if schema not in ("shared", "commerce", "knowledge"):
             continue
         start = m.end()
         depth, end = 1, start
@@ -126,6 +132,9 @@ def main() -> None:
             upper = text_def.upper()
             if re.match(r"^(CONSTRAINT|FOREIGN\s+KEY|UNIQUE|CHECK)\b", upper):
                 continue
+            if "GENERATED ALWAYS AS" in upper:
+                # 生成列由数据库计算，不映射（检索时用 SQL 表达式引用）
+                continue
             if upper.startswith("PRIMARY KEY"):
                 pk_cols = [a or b for a, b in re.findall(r'"(\w+)"|(\w+)', text_def.replace("PRIMARY KEY", ""))]
                 continue
@@ -143,7 +152,9 @@ def main() -> None:
         for name, raw_type, inline_pk, remainder in cols:
             is_pk = inline_pk or name in pk_cols
             flag = ", primary_key=True" if is_pk else ""
-            lines.append("    " + name + " = mapped_column(" + map_type(raw_type) + flag + default_expression(remainder) + ")")
+            attr = RESERVED_ATTRS.get(name, name)
+            col_arg = '"' + name + '", ' if attr != name else ""
+            lines.append("    " + attr + " = mapped_column(" + col_arg + map_type(raw_type) + flag + default_expression(remainder) + ")")
         lines.append("")
         lines.append("")
         blocks.append("\n".join(lines))

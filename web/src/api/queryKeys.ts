@@ -6,6 +6,20 @@ type Params = Record<string, QueryValue>;
 export const queryKeys = {
   me: () => ['me'] as const,
 
+  knowledge: {
+    overview: () => ['knowledge', 'overview'] as const,
+    documents: (params: Params) => ['knowledge', 'documents', params] as const,
+    document: (id: number | string) => ['knowledge', 'document', id] as const,
+    versions: (id: number | string) => ['knowledge', 'versions', id] as const,
+    chunks: (id: number | string, params: Params) => ['knowledge', 'chunks', id, params] as const,
+    rules: (params: Params) => ['knowledge', 'rules', params] as const,
+    conflicts: (params: Params) => ['knowledge', 'conflicts', params] as const,
+    reviewTasks: (params: Params) => ['knowledge', 'review', params] as const,
+    reviewTask: (id: number | string) => ['knowledge', 'review-task', id] as const,
+    comments: (id: number | string) => ['knowledge', 'comments', id] as const,
+    governance: () => ['knowledge', 'governance'] as const,
+  },
+
   products: {
     all: () => ['products'] as const,
     list: (params: Params) => ['products', 'list', params] as const,

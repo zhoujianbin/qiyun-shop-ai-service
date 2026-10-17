@@ -13,6 +13,11 @@ export const PERMISSIONS = [
   'shared:staff:read', 'shared:staff:write',
   'shared:role:read', 'shared:role:write',
   'shared:audit:read',
+  'knowledge:document:read', 'knowledge:document:write', 'knowledge:document:import',
+  'knowledge:document:archive', 'knowledge:document:publish', 'knowledge:document:rollback',
+  'knowledge:rule:read', 'knowledge:rule:write',
+  'knowledge:review:read', 'knowledge:review:write',
+  'knowledge:retrieval:test', 'knowledge:governance:read',
 ] as const;
 export type PermissionCode = (typeof PERMISSIONS)[number];
 
@@ -39,11 +44,24 @@ export const P = {
   roleRead: 'shared:role:read',
   roleWrite: 'shared:role:write',
   auditRead: 'shared:audit:read',
+  knowledgeDocumentRead: 'knowledge:document:read',
+  knowledgeDocumentWrite: 'knowledge:document:write',
+  knowledgeDocumentImport: 'knowledge:document:import',
+  knowledgeDocumentArchive: 'knowledge:document:archive',
+  knowledgeDocumentPublish: 'knowledge:document:publish',
+  knowledgeDocumentRollback: 'knowledge:document:rollback',
+  knowledgeRuleRead: 'knowledge:rule:read',
+  knowledgeRuleWrite: 'knowledge:rule:write',
+  knowledgeReviewRead: 'knowledge:review:read',
+  knowledgeReviewWrite: 'knowledge:review:write',
+  knowledgeRetrievalTest: 'knowledge:retrieval:test',
+  knowledgeGovernanceRead: 'knowledge:governance:read',
 } as const satisfies Record<string, PermissionCode>;
 
 export const ROLE_CODES = [
   'ENTERPRISE_ADMIN', 'ECOM_OPERATOR', 'INVENTORY_KEEPER',
   'AFTER_SALES_SPECIALIST', 'FINANCE_AUDITOR', 'SERVICE_SUPERVISOR',
+  'KNOWLEDGE_ADMIN', 'KNOWLEDGE_REVIEWER', 'KNOWLEDGE_EDITOR', 'CS_AGENT',
 ] as const;
 export type RoleCode = (typeof ROLE_CODES)[number];
 
@@ -54,4 +72,8 @@ export const ROLE_LABELS: Record<RoleCode, string> = {
   AFTER_SALES_SPECIALIST: '售后专员',
   FINANCE_AUDITOR: '财务/只读审计',
   SERVICE_SUPERVISOR: '客服主管',
+  KNOWLEDGE_ADMIN: '知识管理员',
+  KNOWLEDGE_REVIEWER: '知识审核员',
+  KNOWLEDGE_EDITOR: '内容运营',
+  CS_AGENT: '普通客服',
 };

@@ -29,7 +29,7 @@ def ddl_columns() -> dict[tuple[str, str], set[str]]:
     result = {}
     for m in re.finditer(r"CREATE TABLE\s+(\w+)\.(\w+)\s*\(", DDL):
         schema, table = m.group(1), m.group(2)
-        if schema not in ("shared", "commerce"):
+        if schema not in ("shared", "commerce", "knowledge"):
             continue
         start = m.end()
         depth, end = 1, start
@@ -48,6 +48,8 @@ def ddl_columns() -> dict[tuple[str, str], set[str]]:
             upper = text.upper()
             if re.match(r"^(CONSTRAINT|FOREIGN\s+KEY|UNIQUE|CHECK|PRIMARY\s+KEY)\b", upper):
                 continue
+            if "GENERATED ALWAYS AS" in upper:
+                continue  # 生成列不映射到 ORM
             cm = re.match(r"(\w+)\s+[A-Za-z]+", text)
             if cm:
                 cols.add(cm.group(1))
@@ -87,7 +89,7 @@ def test_primary_keys_match():
     ddl_pk = {}
     for m in re.finditer(r"CREATE TABLE\s+(\w+)\.(\w+)\s*\(", DDL):
         schema, table = m.group(1), m.group(2)
-        if schema not in ("shared", "commerce"):
+        if schema not in ("shared", "commerce", "knowledge"):
             continue
         start = m.end()
         depth, end = 1, start

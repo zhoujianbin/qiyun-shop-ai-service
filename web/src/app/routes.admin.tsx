@@ -35,4 +35,12 @@ export const adminRoutes: RouteObject[] = [
   { path: 'channels', element: protect([P.channelRead], () => import('@/pages/admin/ChannelAccountPage')) },
   { path: 'audit', element: protect([P.auditRead], () => import('@/pages/admin/AuditLogPage')) },
   { path: 'reports', element: protect([P.reportRead], () => import('@/pages/admin/ReportPage')) },
+  // 二期：知识库
+  { path: 'knowledge', element: protect([P.knowledgeDocumentRead], () => import('@/pages/knowledge/OverviewPage')) },
+  { path: 'knowledge/documents', element: protect([P.knowledgeDocumentRead], () => import('@/pages/knowledge/DocumentListPage')) },
+  { path: 'knowledge/documents/:documentPk', element: protect([P.knowledgeDocumentRead], () => import('@/pages/knowledge/DocumentDetailPage')) },
+  { path: 'knowledge/editor', element: protect([P.knowledgeDocumentWrite], () => import('@/pages/knowledge/EditorPage')) },
+  { path: 'knowledge/review', element: protect([P.knowledgeReviewRead], () => import('@/pages/knowledge/ReviewPage')) },
+  { path: 'knowledge/retrieval-test', element: protect([P.knowledgeRetrievalTest], () => import('@/pages/knowledge/RetrievalTestPage')) },
+  { path: 'knowledge/governance', element: protect([P.knowledgeGovernanceRead], () => import('@/pages/knowledge/GovernancePage')) },
 ];

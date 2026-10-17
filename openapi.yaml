@@ -3358,6 +3358,819 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/knowledge/import/jobs:
+    post:
+      tags:
+      - knowledge
+      summary: Create Import Job
+      operationId: create_import_job_api_v1_knowledge_import_jobs_post
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Body_create_import_job_api_v1_knowledge_import_jobs_post'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportJobView'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/knowledge/import/jobs/{job_id}:
+    get:
+      tags:
+      - knowledge
+      summary: Get Import Job
+      operationId: get_import_job_api_v1_knowledge_import_jobs__job_id__get
+      parameters:
+      - name: job_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Job Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportJobView'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/knowledge/preview-chunks:
+    post:
+      tags:
+      - knowledge
+      summary: Preview Chunks
+      operationId: preview_chunks_api_v1_knowledge_preview_chunks_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChunkPreviewRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/ChunkPreviewItem'
+                type: array
+                title: Response Preview Chunks Api V1 Knowledge Preview Chunks Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/knowledge/retrieval/test:
+    post:
+      tags:
+      - knowledge
+      summary: Retrieval Test
+      operationId: retrieval_test_api_v1_knowledge_retrieval_test_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RetrievalRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RetrievalResult'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/knowledge/documents:
+    get:
+      tags:
+      - knowledge
+      summary: List Documents
+      operationId: list_documents_api_v1_knowledge_documents_get
+      parameters:
+      - name: keyword
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Keyword
+      - name: category
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Category
+      - name: status
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Status
+      - name: product_scope
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Product Scope
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          default: 1
+          title: Page
+      - name: page_size
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          default: 20
+          title: Page Size
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentPage'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/knowledge/documents/{document_pk}:
+    get:
+      tags:
+      - knowledge
+      summary: Get Document
+      operationId: get_document_api_v1_knowledge_documents__document_pk__get
+      parameters:
+      - name: document_pk
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Document Pk
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentView'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/knowledge/governance/report:
+    get:
+      tags:
+      - knowledge
+      summary: Governance Report
+      operationId: governance_report_api_v1_knowledge_governance_report_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response Governance Report Api V1 Knowledge Governance Report
+                  Get
+  /api/v1/knowledge/overview:
+    get:
+      tags:
+      - knowledge
+      summary: Overview
+      operationId: overview_api_v1_knowledge_overview_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+  /api/v1/knowledge/rules:
+    get:
+      tags:
+      - knowledge
+      summary: List Rules
+      operationId: list_rules_api_v1_knowledge_rules_get
+      parameters:
+      - name: status
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Status
+      - name: source_kind
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Source Kind
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RuleView'
+                title: Response List Rules Api V1 Knowledge Rules Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    post:
+      tags:
+      - knowledge
+      summary: Create Rule
+      operationId: create_rule_api_v1_knowledge_rules_post
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RuleCreate'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RuleView'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/knowledge/rules/import:
+    post:
+      tags:
+      - knowledge
+      summary: Import Rules
+      operationId: import_rules_api_v1_knowledge_rules_import_post
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Body_import_rules_api_v1_knowledge_rules_import_post'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RuleImportResult'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/knowledge/rules/{rule_pk}:
+    get:
+      tags:
+      - knowledge
+      summary: Get Rule
+      operationId: get_rule_api_v1_knowledge_rules__rule_pk__get
+      parameters:
+      - name: rule_pk
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Rule Pk
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RuleView'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    patch:
+      tags:
+      - knowledge
+      summary: Update Rule
+      operationId: update_rule_api_v1_knowledge_rules__rule_pk__patch
+      parameters:
+      - name: rule_pk
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Rule Pk
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RuleUpdate'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RuleView'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/knowledge/rules/check-conflicts:
+    post:
+      tags:
+      - knowledge
+      summary: Check Conflicts
+      operationId: check_conflicts_api_v1_knowledge_rules_check_conflicts_post
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/RuleConflictView'
+                type: array
+                title: Response Check Conflicts Api V1 Knowledge Rules Check Conflicts
+                  Post
+  /api/v1/knowledge/rule-conflicts:
+    get:
+      tags:
+      - knowledge
+      summary: List Conflicts
+      operationId: list_conflicts_api_v1_knowledge_rule_conflicts_get
+      parameters:
+      - name: status
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Status
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RuleConflictView'
+                title: Response List Conflicts Api V1 Knowledge Rule Conflicts Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/knowledge/rule-conflicts/{conflict_id}:
+    patch:
+      tags:
+      - knowledge
+      summary: Resolve Conflict
+      operationId: resolve_conflict_api_v1_knowledge_rule_conflicts__conflict_id__patch
+      parameters:
+      - name: conflict_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Conflict Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RuleConflictView'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/knowledge/documents/{document_pk}/versions:
+    get:
+      tags:
+      - knowledge
+      summary: List Versions
+      operationId: list_versions_api_v1_knowledge_documents__document_pk__versions_get
+      parameters:
+      - name: document_pk
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Document Pk
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/VersionBase'
+                title: Response List Versions Api V1 Knowledge Documents  Document
+                  Pk  Versions Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    post:
+      tags:
+      - knowledge
+      summary: Create Version
+      operationId: create_version_api_v1_knowledge_documents__document_pk__versions_post
+      parameters:
+      - name: document_pk
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Document Pk
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VersionCreateRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VersionBase'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/knowledge/versions/{version_id}/submit:
+    post:
+      tags:
+      - knowledge
+      summary: Submit Version
+      operationId: submit_version_api_v1_knowledge_versions__version_id__submit_post
+      parameters:
+      - name: version_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Version Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VersionBase'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/knowledge/versions/{version_id}/publish:
+    post:
+      tags:
+      - knowledge
+      summary: Publish Version
+      operationId: publish_version_api_v1_knowledge_versions__version_id__publish_post
+      parameters:
+      - name: version_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Version Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PublishRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublishResult'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/knowledge/versions/{version_id}/rollback:
+    post:
+      tags:
+      - knowledge
+      summary: Rollback Version
+      operationId: rollback_version_api_v1_knowledge_versions__version_id__rollback_post
+      parameters:
+      - name: version_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Version Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VersionBase'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/knowledge/versions/{version_id}/chunks:
+    get:
+      tags:
+      - knowledge
+      summary: List Chunks
+      operationId: list_chunks_api_v1_knowledge_versions__version_id__chunks_get
+      parameters:
+      - name: version_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Version Id
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          default: 1
+          title: Page
+      - name: page_size
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          default: 20
+          title: Page Size
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response List Chunks Api V1 Knowledge Versions  Version Id  Chunks
+                  Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/knowledge/review/tasks:
+    get:
+      tags:
+      - knowledge
+      summary: List Review Tasks
+      operationId: list_review_tasks_api_v1_knowledge_review_tasks_get
+      parameters:
+      - name: status
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Status
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ReviewTaskView'
+                title: Response List Review Tasks Api V1 Knowledge Review Tasks Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/knowledge/review/tasks/{task_id}:
+    get:
+      tags:
+      - knowledge
+      summary: Get Review Task
+      operationId: get_review_task_api_v1_knowledge_review_tasks__task_id__get
+      parameters:
+      - name: task_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Task Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReviewTaskView'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/knowledge/review/tasks/{task_id}/claim:
+    post:
+      tags:
+      - knowledge
+      summary: Claim Review Task
+      operationId: claim_review_task_api_v1_knowledge_review_tasks__task_id__claim_post
+      parameters:
+      - name: task_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Task Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReviewTaskView'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/knowledge/review/tasks/{task_id}/decide:
+    post:
+      tags:
+      - knowledge
+      summary: Decide Review Task
+      operationId: decide_review_task_api_v1_knowledge_review_tasks__task_id__decide_post
+      parameters:
+      - name: task_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Task Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReviewDecideRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReviewTaskView'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/knowledge/review/tasks/{task_id}/comments:
+    get:
+      tags:
+      - knowledge
+      summary: List Review Comments
+      operationId: list_review_comments_api_v1_knowledge_review_tasks__task_id__comments_get
+      parameters:
+      - name: task_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Task Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ReviewCommentView'
+                title: Response List Review Comments Api V1 Knowledge Review Tasks  Task
+                  Id  Comments Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    post:
+      tags:
+      - knowledge
+      summary: Add Review Comment
+      operationId: add_review_comment_api_v1_knowledge_review_tasks__task_id__comments_post
+      parameters:
+      - name: task_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Task Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReviewCommentCreate'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReviewCommentView'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
 components:
   schemas:
     AddressCreate:
@@ -3765,7 +4578,7 @@ components:
           type: array
           title: Items
         meta:
-          $ref: '#/components/schemas/PageMeta'
+          $ref: '#/components/schemas/app__schemas__views__PageMeta'
       additionalProperties: true
       type: object
       required:
@@ -4189,7 +5002,7 @@ components:
           type: array
           title: Items
         meta:
-          $ref: '#/components/schemas/PageMeta'
+          $ref: '#/components/schemas/app__schemas__views__PageMeta'
       additionalProperties: true
       type: object
       required:
@@ -4269,6 +5082,31 @@ components:
       - resource_type
       - created_at
       title: AuditLogView
+    Body_create_import_job_api_v1_knowledge_import_jobs_post:
+      properties:
+        files:
+          items:
+            type: string
+            contentMediaType: application/octet-stream
+          type: array
+          title: Files
+          description: 一次可传多个文件
+      type: object
+      required:
+      - files
+      title: Body_create_import_job_api_v1_knowledge_import_jobs_post
+    Body_import_rules_api_v1_knowledge_rules_import_post:
+      properties:
+        files:
+          items:
+            type: string
+            contentMediaType: application/octet-stream
+          type: array
+          title: Files
+      type: object
+      required:
+      - files
+      title: Body_import_rules_api_v1_knowledge_rules_import_post
     Body_upload_attachment_api_v1_attachments_post:
       properties:
         file:
@@ -4327,7 +5165,7 @@ components:
           type: array
           title: Items
         meta:
-          $ref: '#/components/schemas/PageMeta'
+          $ref: '#/components/schemas/app__schemas__views__PageMeta'
       additionalProperties: true
       type: object
       required:
@@ -4385,7 +5223,7 @@ components:
           type: array
           title: Items
         meta:
-          $ref: '#/components/schemas/PageMeta'
+          $ref: '#/components/schemas/app__schemas__views__PageMeta'
       additionalProperties: true
       type: object
       required:
@@ -4694,7 +5532,7 @@ components:
           type: array
           title: Items
         meta:
-          $ref: '#/components/schemas/PageMeta'
+          $ref: '#/components/schemas/app__schemas__views__PageMeta'
       additionalProperties: true
       type: object
       required:
@@ -4823,6 +5661,51 @@ components:
       - commerce_enabled
       - status
       title: ChannelView
+    ChunkPreviewItem:
+      properties:
+        ord:
+          type: integer
+          title: Ord
+        title_path:
+          type: string
+          title: Title Path
+          default: ''
+        content:
+          type: string
+          title: Content
+        char_count:
+          type: integer
+          title: Char Count
+        line_start:
+          type: integer
+          title: Line Start
+        line_end:
+          type: integer
+          title: Line End
+      type: object
+      required:
+      - ord
+      - content
+      - char_count
+      - line_start
+      - line_end
+      title: ChunkPreviewItem
+    ChunkPreviewRequest:
+      properties:
+        content_md:
+          type: string
+          maxLength: 200000
+          minLength: 1
+          title: Content Md
+        first_line:
+          type: integer
+          minimum: 1.0
+          title: First Line
+          default: 1
+      type: object
+      required:
+      - content_md
+      title: ChunkPreviewRequest
     CompleteRequest:
       properties:
         method:
@@ -5031,7 +5914,7 @@ components:
           type: array
           title: Items
         meta:
-          $ref: '#/components/schemas/PageMeta'
+          $ref: '#/components/schemas/app__schemas__views__PageMeta'
       additionalProperties: true
       type: object
       required:
@@ -5092,7 +5975,7 @@ components:
           type: array
           title: Items
         meta:
-          $ref: '#/components/schemas/PageMeta'
+          $ref: '#/components/schemas/app__schemas__views__PageMeta'
       additionalProperties: true
       type: object
       required:
@@ -5389,6 +6272,77 @@ components:
       - id
       - deleted
       title: DeleteResult
+    DocumentPage:
+      properties:
+        page:
+          type: integer
+          title: Page
+        page_size:
+          type: integer
+          title: Page Size
+        total:
+          type: integer
+          title: Total
+        items:
+          items:
+            $ref: '#/components/schemas/DocumentView'
+          type: array
+          title: Items
+        meta:
+          $ref: '#/components/schemas/app__schemas__knowledge__PageMeta'
+      type: object
+      required:
+      - page
+      - page_size
+      - total
+      - items
+      - meta
+      title: DocumentPage
+    DocumentView:
+      properties:
+        id:
+          type: integer
+          title: Id
+        document_id:
+          type: string
+          title: Document Id
+        title:
+          type: string
+          title: Title
+        category:
+          type: string
+          title: Category
+        owner:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Owner
+        status:
+          type: string
+          title: Status
+        current_version:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Current Version
+        identity_level:
+          type: string
+          title: Identity Level
+          default: public
+        chunk_count:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Chunk Count
+      additionalProperties: true
+      type: object
+      required:
+      - id
+      - document_id
+      - title
+      - category
+      - status
+      title: DocumentView
     GuestRequest:
       properties:
         display_name:
@@ -5407,6 +6361,69 @@ components:
           title: Detail
       type: object
       title: HTTPValidationError
+    ImportErrorItem:
+      properties:
+        file:
+          type: string
+          title: File
+        reason:
+          type: string
+          title: Reason
+        line:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Line
+      additionalProperties: true
+      type: object
+      required:
+      - file
+      - reason
+      title: ImportErrorItem
+    ImportJobView:
+      properties:
+        id:
+          type: integer
+          title: Id
+        source_type:
+          type: string
+          title: Source Type
+        status:
+          type: string
+          title: Status
+        total:
+          type: integer
+          title: Total
+        succeeded:
+          type: integer
+          title: Succeeded
+        failed:
+          type: integer
+          title: Failed
+        skipped:
+          type: integer
+          title: Skipped
+        errors:
+          items:
+            $ref: '#/components/schemas/ImportErrorItem'
+          type: array
+          title: Errors
+          default: []
+        created_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Created At
+      type: object
+      required:
+      - id
+      - source_type
+      - status
+      - total
+      - succeeded
+      - failed
+      - skipped
+      title: ImportJobView
     InventoryAlertPage:
       properties:
         page:
@@ -5424,7 +6441,7 @@ components:
           type: array
           title: Items
         meta:
-          $ref: '#/components/schemas/PageMeta'
+          $ref: '#/components/schemas/app__schemas__views__PageMeta'
       additionalProperties: true
       type: object
       required:
@@ -5489,7 +6506,7 @@ components:
           type: array
           title: Items
         meta:
-          $ref: '#/components/schemas/PageMeta'
+          $ref: '#/components/schemas/app__schemas__views__PageMeta'
       additionalProperties: true
       type: object
       required:
@@ -5798,7 +6815,7 @@ components:
           type: array
           title: Items
         meta:
-          $ref: '#/components/schemas/PageMeta'
+          $ref: '#/components/schemas/app__schemas__views__PageMeta'
       additionalProperties: true
       type: object
       required:
@@ -6015,7 +7032,7 @@ components:
           type: array
           title: Items
         meta:
-          $ref: '#/components/schemas/PageMeta'
+          $ref: '#/components/schemas/app__schemas__views__PageMeta'
       additionalProperties: true
       type: object
       required:
@@ -6504,7 +7521,7 @@ components:
           type: array
           title: Items
         meta:
-          $ref: '#/components/schemas/PageMeta'
+          $ref: '#/components/schemas/app__schemas__views__PageMeta'
       additionalProperties: true
       type: object
       required:
@@ -6750,24 +7767,6 @@ components:
       - created_at
       - updated_at
       title: OrderView
-    PageMeta:
-      properties:
-        page:
-          type: integer
-          title: Page
-        page_size:
-          type: integer
-          title: Page Size
-        total:
-          type: integer
-          title: Total
-      additionalProperties: true
-      type: object
-      required:
-      - page
-      - page_size
-      - total
-      title: PageMeta
     PasswordChangeRequest:
       properties:
         old_password:
@@ -6859,7 +7858,7 @@ components:
           type: array
           title: Items
         meta:
-          $ref: '#/components/schemas/PageMeta'
+          $ref: '#/components/schemas/app__schemas__views__PageMeta'
       additionalProperties: true
       type: object
       required:
@@ -6944,7 +7943,7 @@ components:
           type: array
           title: Items
         meta:
-          $ref: '#/components/schemas/PageMeta'
+          $ref: '#/components/schemas/app__schemas__views__PageMeta'
       additionalProperties: true
       type: object
       required:
@@ -7276,7 +8275,7 @@ components:
           type: array
           title: Items
         meta:
-          $ref: '#/components/schemas/PageMeta'
+          $ref: '#/components/schemas/app__schemas__views__PageMeta'
       additionalProperties: true
       type: object
       required:
@@ -7398,6 +8397,74 @@ components:
       - status
       - is_default
       title: PublicChannelView
+    PublishRequest:
+      properties:
+        change_summary:
+          type: string
+          maxLength: 2000
+          minLength: 1
+          title: Change Summary
+        effective_from:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Effective From
+      type: object
+      required:
+      - change_summary
+      title: PublishRequest
+    PublishResult:
+      properties:
+        id:
+          type: integer
+          title: Id
+        document_pk:
+          type: integer
+          title: Document Pk
+        version:
+          type: integer
+          title: Version
+        status:
+          type: string
+          title: Status
+        checksum:
+          type: string
+          title: Checksum
+        change_summary:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Change Summary
+        effective_from:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Effective From
+        published_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Published At
+        publish_info:
+          additionalProperties: true
+          type: object
+          title: Publish Info
+          default: {}
+        reasons:
+          items:
+            type: string
+          type: array
+          title: Reasons
+          default: []
+      additionalProperties: true
+      type: object
+      required:
+      - id
+      - document_pk
+      - version
+      - status
+      - checksum
+      title: PublishResult
     ReceiveRequest:
       properties:
         restock:
@@ -7448,7 +8515,7 @@ components:
           type: array
           title: Items
         meta:
-          $ref: '#/components/schemas/PageMeta'
+          $ref: '#/components/schemas/app__schemas__views__PageMeta'
       additionalProperties: true
       type: object
       required:
@@ -7685,7 +8752,7 @@ components:
           type: array
           title: Items
         meta:
-          $ref: '#/components/schemas/PageMeta'
+          $ref: '#/components/schemas/app__schemas__views__PageMeta'
       additionalProperties: true
       type: object
       required:
@@ -7851,6 +8918,115 @@ components:
           title: Staff Remark
       type: object
       title: RemarkUpdate
+    RetrievalFilters:
+      properties:
+        category:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Category
+        product_scope:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Product Scope
+        channel_scope:
+          anyOf:
+          - items:
+              type: string
+            type: array
+          - type: 'null'
+          title: Channel Scope
+      type: object
+      title: RetrievalFilters
+    RetrievalHit:
+      properties:
+        source_type:
+          type: string
+          title: Source Type
+          default: chunk
+        chunk_id:
+          type: integer
+          title: Chunk Id
+        document_id:
+          type: string
+          title: Document Id
+        document_pk:
+          type: integer
+          title: Document Pk
+        version:
+          type: integer
+          title: Version
+        chunk_ord:
+          type: integer
+          title: Chunk Ord
+        title_path:
+          type: string
+          title: Title Path
+          default: ''
+        line_start:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Line Start
+        line_end:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Line End
+        snippet:
+          type: string
+          title: Snippet
+          default: ''
+      additionalProperties: true
+      type: object
+      required:
+      - chunk_id
+      - document_id
+      - document_pk
+      - version
+      - chunk_ord
+      title: RetrievalHit
+    RetrievalRequest:
+      properties:
+        query:
+          type: string
+          maxLength: 2000
+          minLength: 1
+          title: Query
+        top_k:
+          type: integer
+          maximum: 50.0
+          minimum: 1.0
+          title: Top K
+          default: 10
+        filters:
+          $ref: '#/components/schemas/RetrievalFilters'
+          default: {}
+        identity_level:
+          type: string
+          title: Identity Level
+          default: public
+      type: object
+      required:
+      - query
+      title: RetrievalRequest
+    RetrievalResult:
+      properties:
+        hits:
+          items:
+            $ref: '#/components/schemas/RetrievalHit'
+          type: array
+          title: Hits
+        debug:
+          additionalProperties: true
+          type: object
+          title: Debug
+          default: {}
+      type: object
+      required:
+      - hits
+      title: RetrievalResult
     ReturnShipmentRequest:
       properties:
         carrier_id:
@@ -7880,6 +9056,74 @@ components:
       required:
       - tracking_no
       title: ReturnShipmentRequest
+    ReviewCommentCreate:
+      properties:
+        anchor:
+          additionalProperties: true
+          type: object
+          title: Anchor
+          default: {}
+        content:
+          type: string
+          maxLength: 4000
+          minLength: 1
+          title: Content
+      type: object
+      required:
+      - content
+      title: ReviewCommentCreate
+    ReviewCommentView:
+      properties:
+        id:
+          type: integer
+          title: Id
+        version_id:
+          type: integer
+          title: Version Id
+        task_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Task Id
+        author_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Author Id
+        anchor:
+          additionalProperties: true
+          type: object
+          title: Anchor
+          default: {}
+        content:
+          type: string
+          title: Content
+        resolved:
+          type: boolean
+          title: Resolved
+          default: false
+      additionalProperties: true
+      type: object
+      required:
+      - id
+      - version_id
+      - content
+      title: ReviewCommentView
+    ReviewDecideRequest:
+      properties:
+        decision:
+          type: string
+          title: Decision
+        note:
+          type: string
+          maxLength: 2000
+          minLength: 1
+          title: Note
+      type: object
+      required:
+      - decision
+      - note
+      title: ReviewDecideRequest
     ReviewRequest:
       properties:
         decision:
@@ -7924,6 +9168,43 @@ components:
       required:
       - decision
       title: ReviewRequest
+    ReviewTaskView:
+      properties:
+        id:
+          type: integer
+          title: Id
+        document_version_id:
+          type: integer
+          title: Document Version Id
+        assignee_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Assignee Id
+        status:
+          type: string
+          title: Status
+        decision:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Decision
+        note:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Note
+        self_review:
+          type: boolean
+          title: Self Review
+          default: false
+      additionalProperties: true
+      type: object
+      required:
+      - id
+      - document_version_id
+      - status
+      title: ReviewTaskView
     RoleCodes:
       properties:
         role_codes:
@@ -7952,7 +9233,7 @@ components:
           type: array
           title: Items
         meta:
-          $ref: '#/components/schemas/PageMeta'
+          $ref: '#/components/schemas/app__schemas__views__PageMeta'
       additionalProperties: true
       type: object
       required:
@@ -7995,6 +9276,199 @@ components:
       - is_system
       - permissions
       title: RoleView
+    RuleConflictView:
+      properties:
+        id:
+          type: integer
+          title: Id
+        rule_a_id:
+          type: integer
+          title: Rule A Id
+        rule_b_id:
+          type: integer
+          title: Rule B Id
+        conflict_type:
+          type: string
+          title: Conflict Type
+        severity:
+          type: string
+          title: Severity
+        status:
+          type: string
+          title: Status
+        detail:
+          additionalProperties: true
+          type: object
+          title: Detail
+          default: {}
+      additionalProperties: true
+      type: object
+      required:
+      - id
+      - rule_a_id
+      - rule_b_id
+      - conflict_type
+      - severity
+      - status
+      title: RuleConflictView
+    RuleCreate:
+      properties:
+        rule_id:
+          type: string
+          maxLength: 48
+          minLength: 1
+          title: Rule Id
+        source_kind:
+          type: string
+          title: Source Kind
+          default: manual
+        condition:
+          additionalProperties: true
+          type: object
+          title: Condition
+        action:
+          additionalProperties: true
+          type: object
+          title: Action
+          default: {}
+        forbid:
+          items: {}
+          type: array
+          title: Forbid
+          default: []
+        priority:
+          type: integer
+          title: Priority
+          default: 100
+        status:
+          type: string
+          title: Status
+          default: DRAFT
+        conflict_group:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Conflict Group
+      type: object
+      required:
+      - rule_id
+      - condition
+      title: RuleCreate
+    RuleImportResult:
+      properties:
+        imported:
+          type: integer
+          title: Imported
+        updated:
+          type: integer
+          title: Updated
+        total:
+          type: integer
+          title: Total
+        by_source_kind:
+          additionalProperties:
+            type: integer
+          type: object
+          title: By Source Kind
+          default: {}
+        open_conflicts:
+          type: integer
+          title: Open Conflicts
+          default: 0
+      type: object
+      required:
+      - imported
+      - updated
+      - total
+      title: RuleImportResult
+    RuleUpdate:
+      properties:
+        condition:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Condition
+        action:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Action
+        forbid:
+          anyOf:
+          - items: {}
+            type: array
+          - type: 'null'
+          title: Forbid
+        priority:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Priority
+        status:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Status
+        conflict_group:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Conflict Group
+      type: object
+      title: RuleUpdate
+    RuleView:
+      properties:
+        id:
+          type: integer
+          title: Id
+        rule_id:
+          type: string
+          title: Rule Id
+        source_kind:
+          type: string
+          title: Source Kind
+        condition:
+          additionalProperties: true
+          type: object
+          title: Condition
+        action:
+          additionalProperties: true
+          type: object
+          title: Action
+        forbid:
+          items: {}
+          type: array
+          title: Forbid
+          default: []
+        priority:
+          type: integer
+          title: Priority
+        status:
+          type: string
+          title: Status
+        conflict_group:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Conflict Group
+        source_file:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Source File
+      additionalProperties: true
+      type: object
+      required:
+      - id
+      - rule_id
+      - source_kind
+      - condition
+      - action
+      - priority
+      - status
+      title: RuleView
     SalesDailyItemView:
       properties:
         stat_date:
@@ -8075,7 +9549,7 @@ components:
           type: array
           title: Items
         meta:
-          $ref: '#/components/schemas/PageMeta'
+          $ref: '#/components/schemas/app__schemas__views__PageMeta'
       additionalProperties: true
       type: object
       required:
@@ -8444,7 +9918,7 @@ components:
           type: array
           title: Items
         meta:
-          $ref: '#/components/schemas/PageMeta'
+          $ref: '#/components/schemas/app__schemas__views__PageMeta'
       additionalProperties: true
       type: object
       required:
@@ -8621,7 +10095,7 @@ components:
           type: array
           title: Items
         meta:
-          $ref: '#/components/schemas/PageMeta'
+          $ref: '#/components/schemas/app__schemas__views__PageMeta'
       additionalProperties: true
       type: object
       required:
@@ -9134,7 +10608,7 @@ components:
           type: array
           title: Items
         meta:
-          $ref: '#/components/schemas/PageMeta'
+          $ref: '#/components/schemas/app__schemas__views__PageMeta'
       additionalProperties: true
       type: object
       required:
@@ -9312,6 +10786,64 @@ components:
       - msg
       - type
       title: ValidationError
+    VersionBase:
+      properties:
+        id:
+          type: integer
+          title: Id
+        document_pk:
+          type: integer
+          title: Document Pk
+        version:
+          type: integer
+          title: Version
+        status:
+          type: string
+          title: Status
+        checksum:
+          type: string
+          title: Checksum
+        change_summary:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Change Summary
+        effective_from:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Effective From
+        published_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Published At
+      additionalProperties: true
+      type: object
+      required:
+      - id
+      - document_pk
+      - version
+      - status
+      - checksum
+      title: VersionBase
+    VersionCreateRequest:
+      properties:
+        content_md:
+          type: string
+          maxLength: 500000
+          minLength: 1
+          title: Content Md
+        change_summary:
+          anyOf:
+          - type: string
+            maxLength: 2000
+          - type: 'null'
+          title: Change Summary
+      type: object
+      required:
+      - content_md
+      title: VersionCreateRequest
     WarehouseCreate:
       properties:
         code:
@@ -9371,7 +10903,7 @@ components:
           type: array
           title: Items
         meta:
-          $ref: '#/components/schemas/PageMeta'
+          $ref: '#/components/schemas/app__schemas__views__PageMeta'
       additionalProperties: true
       type: object
       required:
@@ -9440,3 +10972,38 @@ components:
           title: Notify Customer
       type: object
       title: CancelRequest
+    app__schemas__knowledge__PageMeta:
+      properties:
+        page:
+          type: integer
+          title: Page
+        page_size:
+          type: integer
+          title: Page Size
+        total:
+          type: integer
+          title: Total
+      type: object
+      required:
+      - page
+      - page_size
+      - total
+      title: PageMeta
+    app__schemas__views__PageMeta:
+      properties:
+        page:
+          type: integer
+          title: Page
+        page_size:
+          type: integer
+          title: Page Size
+        total:
+          type: integer
+          title: Total
+      additionalProperties: true
+      type: object
+      required:
+      - page
+      - page_size
+      - total
+      title: PageMeta
