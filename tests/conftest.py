@@ -90,8 +90,10 @@ def _seed_ontology(db) -> None:
         text("select id from ontology.entity where status = 'DRAFT'")).fetchall()]
     if draft_ids:
         ontology.review(db, actor, entity_ids=draft_ids, action="approve")
+    # 只补审 DRAFT：DEPRECATED 是审核结论，不能被批量通过重新激活
     fault_ids = [row[0] for row in db.execute(
-        text("select id from ontology.entity where kind = 'fault'")).fetchall()]
+        text("select id from ontology.entity where kind = 'fault'"
+             " and status = 'DRAFT'")).fetchall()]
     if fault_ids:
         ontology.review(db, actor, entity_ids=fault_ids, action="approve")
 

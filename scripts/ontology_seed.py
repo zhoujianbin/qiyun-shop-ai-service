@@ -45,9 +45,12 @@ def main() -> int:
                 text("select id from ontology.entity where status = 'DRAFT'")).fetchall()]
             if ids:
                 approved = ontology.review(db, ACTOR, entity_ids=ids, action="approve")["updated"]
+                # 只补审 DRAFT：DEPRECATED 是审核结论，不能被批量通过重新激活
                 fault_ids = [row[0] for row in db.execute(
-                    text("select id from ontology.entity where kind = 'fault'")).fetchall()]
-                ontology.review(db, ACTOR, entity_ids=fault_ids, action="approve")
+                    text("select id from ontology.entity where kind = 'fault'"
+                         " and status = 'DRAFT'")).fetchall()]
+                if fault_ids:
+                    ontology.review(db, ACTOR, entity_ids=fault_ids, action="approve")
         backfilled = ontology.backfill_chunk_entities(db, ACTOR) if args.with_backfill else None
         scoped = ontology.backfill_product_scope(db, ACTOR) if args.with_scope_backfill else None
 

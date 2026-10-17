@@ -149,6 +149,51 @@ def _query_invoice(db: Session, state: dict, args: dict) -> dict:
     return {"facts": {"invoices": facts, "count": len(facts)}, "order_id": found.id}
 
 
+MY_ORDERS_SCAN_LIMIT = 10
+
+
+def _query_my_orders(db: Session, state: dict, args: dict) -> dict:
+    """列调用者本人的订单，可按商品名/状态过滤。
+
+    一期 list_orders 的 keyword 只匹配单号与收件人，所以这里先取最近 N 单，
+    再逐单取明细、在进程内按商品名过滤（N≤10，实测单次 <5ms）。
+    """
+    actor = state["actor"] or {}
+    try:
+        limit = int(args.get("limit") or 5)
+    except (TypeError, ValueError):
+        limit = 5
+    limit = max(1, min(limit, MY_ORDERS_SCAN_LIMIT))
+    status = args.get("status")
+    keyword = (args.get("product_keyword") or "").strip()
+
+    page = order.list_orders(db, actor, page=1, page_size=MY_ORDERS_SCAN_LIMIT,
+                             status=status)
+    matched: list[dict] = []
+    for item in page["items"]:
+        detail = order.get_order(db, actor, item["id"])
+        lines = detail.get("items") or []
+        names = [str(line.get("product_name") or "") for line in lines]
+        if keyword and not any(keyword in name for name in names):
+            continue
+        matched.append({
+            "order_no": detail.get("order_no"),
+            "status": detail.get("status"),
+            "created_at": detail.get("created_at"),
+            "paid_amount": detail.get("paid_amount"),
+            "items": [{"product_name": line.get("product_name"),
+                       "quantity": line.get("quantity"),
+                       "after_sales_status": line.get("after_sales_status")}
+                      for line in lines],
+        })
+        if len(matched) >= limit:
+            break
+    return {"facts": {"orders": matched, "matched": len(matched),
+                      "scanned": len(page["items"]), "total_orders": page["total"],
+                      "keyword": keyword or None},
+            "note": "这是调用者本人的订单摘要，明细与写操作仍需按订单单独核验"}
+
+
 def _order_selector(desc: str) -> dict:
     return {"type": "object",
             "properties": {"order_no": {"type": "string",
@@ -178,6 +223,22 @@ TOOLS: dict[str, ToolSpec] = {
                                      "model_code": {"type": "string", "description": "形如 QL-L3P 的型号"}},
                       "additionalProperties": False},
         run=_query_product, read_only=True, requires_identity=False, scope="catalog"),
+    "query_my_orders": ToolSpec(
+        name="query_my_orders",
+        description=("当用户提到自己的订单但没给订单号（例如“我订单里那个门锁”）时，"
+                     "先用它列出本人订单，可按商品名或状态过滤。"
+                     "用户已给出订单号时不要用，直接查该单。"),
+        input_schema={"type": "object",
+                      "properties": {
+                          "product_keyword": {"type": "string",
+                                              "description": "商品名关键词，如 门锁、摄像头、扫地机"},
+                          "status": {"type": "string",
+                                     "description": "订单状态，如 PENDING_PAYMENT、COMPLETED"},
+                          "limit": {"type": "integer",
+                                    "description": "最多返回几单，1-10，默认 5"},
+                      },
+                      "additionalProperties": False},
+        run=_query_my_orders, read_only=True, requires_identity=False, scope="order"),
     "query_order": ToolSpec(
         name="query_order",
         description=("当用户给出订单号并询问订单状态、金额、下单时间等订单事实时使用。"

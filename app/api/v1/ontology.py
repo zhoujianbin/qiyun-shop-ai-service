@@ -92,10 +92,12 @@ def review(payload: ReviewRequest, request: Request, db: Session = Depends(get_d
 
 
 @router.get("/graph", response_model=GraphView)
-def graph(entity_id: int, depth: int = Query(1, ge=1, le=2), db: Session = Depends(get_db),
+def graph(entity_id: int, depth: int = Query(1, ge=1, le=2),
+          product_scope: str | None = Query(None, max_length=32),
+          db: Session = Depends(get_db),
           user: AppUser = Depends(require("ontology:read"))) -> dict:
     # 图遍历含内部实体编码，客户侧不可见；服务内已把深度上限钳到 2
-    return ontology.graph(db, entity_id, depth=depth)
+    return ontology.graph(db, entity_id, depth=depth, product_scope=product_scope)
 
 
 @router.post("/chunks/backfill", response_model=BackfillResult)

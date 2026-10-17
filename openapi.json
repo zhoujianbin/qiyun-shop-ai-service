@@ -7404,6 +7404,23 @@
               "default": 1,
               "title": "Depth"
             }
+          },
+          {
+            "name": "product_scope",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 32
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Product Scope"
+            }
           }
         ],
         "responses": {
@@ -17047,6 +17064,18 @@
             "type": "string",
             "title": "Predicate"
           },
+          "product_scope": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 32
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Product Scope"
+          },
           "weight": {
             "anyOf": [
               {
@@ -17107,6 +17136,17 @@
           "dst_entity_id": {
             "type": "integer",
             "title": "Dst Entity Id"
+          },
+          "product_scope": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Product Scope"
           },
           "status": {
             "type": "string",

@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from decimal import Decimal
 from pathlib import Path
 
@@ -75,6 +76,7 @@ def relation_view(row: Relation, src: Entity | None = None, dst: Entity | None =
         "src_entity_id": row.src_entity_id, "dst_entity_id": row.dst_entity_id,
         "src_code": src.code if src is not None else None,
         "dst_code": dst.code if dst is not None else None,
+        "product_scope": row.product_scope,
         "weight": str(row.weight) if isinstance(row.weight, Decimal) else row.weight,
         "status": row.status, "source": row.source, "attrs": row.attrs or {},
     }
@@ -93,6 +95,17 @@ def _entity(db: Session, entity_id: int) -> Entity:
     if row is None or row.tenant_id != settings.tenant_id:
         raise NotFound("实体不存在")
     return row
+
+
+def _action_code(value: str) -> str:
+    value = str(value or "").strip()
+    return value if value.startswith("action.") else f"action.{value}" if value else ""
+
+
+def _product_entity(db: Session, code: str) -> Entity | None:
+    return db.execute(select(Entity).where(
+        Entity.tenant_id == settings.tenant_id, Entity.code == code,
+        Entity.kind == "product")).scalar_one_or_none()
 
 
 def list_entities(db: Session, *, kind: str | None = None, status: str | None = None,
@@ -171,8 +184,11 @@ def update_entity(db: Session, actor: dict, entity_id: int, payload: dict) -> di
 
 # ---------------------------------------------------------------- 关系
 def list_relations(db: Session, *, entity_id: int | None = None, predicate: str | None = None,
-                   status: str | None = None, page: int = 1, page_size: int = 50) -> dict:
+                   status: str | None = None, product_scope: str | None = None,
+                   page: int = 1, page_size: int = 50) -> dict:
     stmt = select(Relation).where(Relation.tenant_id == settings.tenant_id)
+    if product_scope:
+        stmt = stmt.where(Relation.product_scope == product_scope)
     if entity_id:
         stmt = stmt.where((Relation.src_entity_id == entity_id) | (Relation.dst_entity_id == entity_id))
     if predicate:
@@ -199,16 +215,22 @@ def upsert_relation(db: Session, actor: dict, payload: dict) -> dict:
     dst = _entity(db, int(payload["dst_entity_id"]))
     if src.id == dst.id:
         raise ValidationError("关系的起点与终点不能相同")
+    scope = (payload.get("product_scope") or "").strip() or None
+    if scope is not None and _product_entity(db, scope) is None:
+        raise ValidationError(f"product_scope 不是已存在的产品编码：{scope}")
     row = db.execute(select(Relation).where(
         Relation.tenant_id == settings.tenant_id, Relation.src_entity_id == src.id,
         Relation.predicate == predicate, Relation.dst_entity_id == dst.id)).scalar_one_or_none()
     if row is None:
         row = Relation(tenant_id=settings.tenant_id, src_entity_id=src.id, dst_entity_id=dst.id,
-                       predicate=predicate, weight=Decimal(str(payload.get("weight") or 1)),
+                       predicate=predicate, product_scope=scope,
+                       weight=Decimal(str(payload.get("weight") or 1)),
                        attrs=payload.get("attrs") or {},
                        status=(payload.get("status") or "DRAFT").upper(), source="manual")
         db.add(row)
     else:
+        if "product_scope" in payload:
+            row.product_scope = scope
         if "weight" in payload and payload["weight"] is not None:
             row.weight = Decimal(str(payload["weight"]))
         if "attrs" in payload and payload["attrs"] is not None:
@@ -322,9 +344,14 @@ def _tags_of(db: Session, entity_ids: list[int]) -> dict[int, dict[str, str]]:
     return result
 
 
-def _product_scope_of(db: Session, entity: Entity, tags: dict[int, dict[str, str]],
-                      one_hop: list[tuple[int, int, str, str]]) -> str | None:
-    """把实体映射为二期已支持的 product_scope。产品直接取编码；部件/配件经一跳找到所属产品。"""
+def _product_scope_of(entity: Entity, tags: dict[int, dict[str, str]],
+                      parent_scopes: dict[int, set[str]]) -> str | None:
+    """把实体映射为二期已支持的 product_scope。
+
+    产品直接取编码，故障取自身 product 属性，部件/配件只在**唯一**归属某产品时才收窄。
+    main_unit 同时属于 QC-C2G 与 QH-G1，这类跨产品共用编码必须返回 None——
+    返回其中任意一个都会把检索错误地锁到别的产品上。
+    """
     tag = tags.get(entity.id, {}).get("product_scope")
     if tag:
         return tag
@@ -335,22 +362,98 @@ def _product_scope_of(db: Session, entity: Entity, tags: dict[int, dict[str, str
         if product_code:
             return str(product_code)
     if entity.kind in ("part", "accessory"):
-        for src_id, dst_id, src_code, dst_code in one_hop:
-            if src_id == entity.id and dst_code and dst_code:
-                return dst_code
-            if dst_id == entity.id and src_code:
-                return src_code
+        scopes = parent_scopes.get(entity.id) or set()
+        if len(scopes) == 1:
+            return next(iter(scopes))
     return None
 
 
-def normalize_question(db: Session, question: str, *, max_entities: int = 3) -> dict:
-    """问题 → 实体（最长匹配优先、不重叠）→ 二期可用的 product_scope。
+FUZZY_MIN_SCORE = 0.6      # 覆盖率阈值（交集 / 较短一方）
+FUZZY_MIN_SHARED = 2       # 至少共享两个二元组，避免单词巧合
+FUZZY_MIN_LEN = 4
+BOOST_STOPWORDS = {"智能", "产品", "设备", "栖云", "家用"}
+CJK_RUN = re.compile(r"[\u4e00-\u9fa5]{2,}")
 
+
+def _bigrams(text: str) -> set[str]:
+    cleaned = re.sub(r"[^\u4e00-\u9fa5A-Za-z0-9]", "", text or "")
+    return {cleaned[i:i + 2] for i in range(len(cleaned) - 1)}
+
+
+def _fuzzy_entity(db: Session, question: str) -> Entity | None:
+    """2-gram 兜底：唯一最优且达阈值才采纳；并列一律放弃。"""
+    if len(question) < FUZZY_MIN_LEN:
+        return None
+    target = _bigrams(question)
+    if not target:
+        return None
+    entities = db.execute(select(Entity).where(
+        Entity.tenant_id == settings.tenant_id, Entity.status == "APPROVED")).scalars().all()
+    if not entities:
+        return None
+    aliases: dict[int, list[str]] = {}
+    for alias, entity in _approved_alias_map(db):
+        aliases.setdefault(entity.id, []).append(alias)
+
+    scored: list[tuple[float, Entity]] = []
+    for entity in entities:
+        candidates = {entity.code, entity.name, *aliases.get(entity.id, [])}
+        best = 0.0
+        for candidate in candidates:
+            grams = _bigrams(candidate)
+            if not grams:
+                continue
+            shared = len(target & grams)
+            if shared < FUZZY_MIN_SHARED:
+                continue
+            # 覆盖率而非 Jaccard：问题里常带"怎么办"这类附加词，Jaccard 会被稀释
+            score = shared / min(len(target), len(grams))
+            best = max(best, score)
+        if best >= FUZZY_MIN_SCORE:
+            scored.append((best, entity))
+    if not scored:
+        return None
+    scored.sort(key=lambda item: item[0], reverse=True)
+    top_score = scored[0][0]
+    winners = [entity for score, entity in scored if score == top_score]
+    return winners[0] if len(winners) == 1 else None
+
+
+def _boost_products(db: Session, question: str) -> list[Entity]:
+    """产品名的宽松命中：只用于排序加权，绝不参与过滤。"""
+    products = db.execute(select(Entity).where(
+        Entity.tenant_id == settings.tenant_id, Entity.status == "APPROVED",
+        Entity.kind == "product")).scalars().all()
+    hits: list[Entity] = []
+    for entity in products:
+        for run in CJK_RUN.findall(entity.name or ""):
+            matched = False
+            for size in range(len(run), 1, -1):
+                for start in range(0, len(run) - size + 1):
+                    token = run[start:start + size]
+                    if token in BOOST_STOPWORDS:
+                        continue
+                    if token in question:
+                        matched = True
+                        break
+                if matched:
+                    break
+            if matched:
+                hits.append(entity)
+                break
+    return hits
+
+
+def normalize_question(db: Session, question: str, *, max_entities: int = 3) -> dict:
+    """问题 → 实体（先精确最长匹配，再 2-gram 兜底）→ 二期可用的 product_scope。
+
+    另返回 boost_entities（产品名宽松命中，仅用于排序）。
     零命中时返回空，调用方据此退化为原样检索。
     """
     text_value = (question or "").strip()
     if not text_value:
-        return {"entities": [], "entity_ids": [], "product_scope": None}
+        return {"entities": [], "entity_ids": [], "product_scope": None,
+                "method": None, "boost_entities": []}
     pairs = _approved_alias_map(db)
     taken: list[tuple[int, int]] = []
     matched: list[dict] = []
@@ -374,8 +477,18 @@ def normalize_question(db: Session, question: str, *, max_entities: int = 3) -> 
                         "name": entity.name, "matched": alias})
         if len(matched) >= max_entities:
             break
+    method = "exact" if matched else None
     if not matched:
-        return {"entities": [], "entity_ids": [], "product_scope": None}
+        fuzzy = _fuzzy_entity(db, text_value)
+        if fuzzy is not None:
+            matched = [{"id": fuzzy.id, "code": fuzzy.code, "kind": fuzzy.kind,
+                        "name": fuzzy.name, "matched": fuzzy.name, "method": "fuzzy"}]
+            method = "fuzzy"
+    boost = _boost_products(db, text_value)
+    boost_payload = [{"id": item.id, "code": item.code, "name": item.name} for item in boost]
+    if not matched:
+        return {"entities": [], "entity_ids": [], "product_scope": None,
+                "method": None, "boost_entities": boost_payload}
 
     ids = [item["id"] for item in matched]
     tags = _tags_of(db, ids)
@@ -384,31 +497,54 @@ def normalize_question(db: Session, question: str, *, max_entities: int = 3) -> 
         (Relation.src_entity_id.in_(ids)) | (Relation.dst_entity_id.in_(ids)))).scalars().all()
     other_ids = {r.src_entity_id for r in neighbors} | {r.dst_entity_id for r in neighbors}
     other_ids -= set(ids)
-    codes = {e.id: e for e in db.execute(select(Entity).where(Entity.id.in_(other_ids))).scalars().all()} if other_ids else {}
-    one_hop = [(r.src_entity_id, r.dst_entity_id,
-                codes.get(r.src_entity_id).code if r.src_entity_id in codes else None,
-                codes.get(r.dst_entity_id).code if r.dst_entity_id in codes else None)
-               for r in neighbors]
-
-    product_scope = None
-    rows = {e.id: e for e in db.execute(select(Entity).where(Entity.id.in_(ids))).scalars().all()}
-    for item in matched:
-        entity = rows.get(item["id"])
-        if entity is None:
+    nodes = {e.id: e for e in db.execute(
+        select(Entity).where(Entity.id.in_(set(ids) | other_ids))).scalars().all()}
+    # 部件/配件的归属产品集合：只有 PART_OF 且另一端确实是产品才算数
+    parent_scopes: dict[int, set[str]] = {}
+    for relation in neighbors:
+        if relation.predicate != "PART_OF":
             continue
-        scope = _product_scope_of(db, entity, tags, one_hop)
-        if scope:
-            product_scope = scope
-            break
-    return {"entities": matched, "entity_ids": ids, "product_scope": product_scope}
+        src_node = nodes.get(relation.src_entity_id)
+        dst_node = nodes.get(relation.dst_entity_id)
+        if src_node is None or dst_node is None or dst_node.kind != "product":
+            continue
+        parent_scopes.setdefault(src_node.id, set()).add(dst_node.code)
+
+    # 范围优先级：产品 > 故障 > 部件/配件。命中更高优先层后不再用低优先层兜底，
+    # 否则"电池鼓包"会因为命中部件 battery 而被错误收窄到 QR-R5M。
+    rows = {e.id: e for e in db.execute(select(Entity).where(Entity.id.in_(ids))).scalars().all()}
+    resolved = [(rows[item["id"]].kind, _product_scope_of(rows[item["id"]], tags, parent_scopes))
+                for item in matched if item["id"] in rows]
+    product_scope = None
+    for kind in ("product", "fault", "part", "accessory"):
+        if not any(item_kind == kind for item_kind, _ in resolved):
+            continue
+        product_scope = next((scope for item_kind, scope in resolved if item_kind == kind and scope), None)
+        break
+    # 产品名宽松命中与部件推导出的范围冲突时，以用户明说的产品为准（如"门锁电池"）
+    if boost_payload and product_scope not in {item["code"] for item in boost_payload}:
+        product_scope = boost_payload[0]["code"]
+    return {"entities": matched, "entity_ids": ids, "product_scope": product_scope,
+            "method": method, "boost_entities": boost_payload}
 
 
 # ---------------------------------------------------------------- 图遍历
-def graph(db: Session, entity_id: int, *, depth: int = 1) -> dict:
-    """无向、限深、带路径去重的邻域展开；depth 上限 2。"""
+def graph(db: Session, entity_id: int, *, depth: int = 1,
+          product_scope: str | None = None) -> dict:
+    """无向、限深、带路径去重的邻域展开；depth 上限 2。
+
+    传入 product_scope 时只走"跨产品通用（NULL）或本产品"的边，
+    避免 SYM-QC-C2G-xx → main_unit → QH-G1 保修 这类跨产品保修推断。
+    """
     root = _entity(db, entity_id)
     depth = max(1, min(int(depth), MAX_DEPTH))
-    rows = db.execute(text("""
+    # 只在有范围时拼条件：NULL 参数在 PostgreSQL 里无法推断类型（AmbiguousParameter）
+    scope_clause = ""
+    params = {"root": root.id, "tenant": settings.tenant_id, "max_depth": depth}
+    if product_scope:
+        scope_clause = "AND (r.product_scope IS NULL OR r.product_scope = :scope)"
+        params["scope"] = product_scope
+    rows = db.execute(text(f"""
         WITH RECURSIVE walk(node_id, predicate, depth, path) AS (
             SELECT CASE WHEN r.src_entity_id = :root THEN r.dst_entity_id ELSE r.src_entity_id END,
                    r.predicate, 1, ARRAY[:root, CASE WHEN r.src_entity_id = :root
@@ -416,6 +552,7 @@ def graph(db: Session, entity_id: int, *, depth: int = 1) -> dict:
             FROM ontology.relation r
             WHERE r.tenant_id = :tenant AND r.status = 'APPROVED'
               AND (r.src_entity_id = :root OR r.dst_entity_id = :root)
+              {scope_clause}
             UNION ALL
             SELECT CASE WHEN r.src_entity_id = w.node_id THEN r.dst_entity_id ELSE r.src_entity_id END,
                    r.predicate, w.depth + 1,
@@ -423,12 +560,13 @@ def graph(db: Session, entity_id: int, *, depth: int = 1) -> dict:
             FROM ontology.relation r
             JOIN walk w ON (r.src_entity_id = w.node_id OR r.dst_entity_id = w.node_id)
             WHERE r.tenant_id = :tenant AND r.status = 'APPROVED'
+              {scope_clause}
               AND w.depth < :max_depth
               AND NOT (CASE WHEN r.src_entity_id = w.node_id THEN r.dst_entity_id ELSE r.src_entity_id END = ANY(w.path))
         )
         SELECT DISTINCT node_id, min(depth) AS depth, min(predicate) AS predicate
         FROM walk GROUP BY node_id ORDER BY depth, node_id
-    """), {"root": root.id, "tenant": settings.tenant_id, "max_depth": depth}).mappings().all()
+    """), params).mappings().all()
     node_ids = [root.id] + [row["node_id"] for row in rows]
     entities = {e.id: e for e in db.execute(select(Entity).where(Entity.id.in_(node_ids))).scalars().all()}
     return {
@@ -437,6 +575,7 @@ def graph(db: Session, entity_id: int, *, depth: int = 1) -> dict:
                    "via": row["predicate"]} for row in rows if row["node_id"] in entities],
         "edge_count": len(rows),
         "depth": depth,
+        "product_scope": product_scope,
     }
 
 
@@ -471,15 +610,20 @@ def _upsert_imported(db: Session, *, code: str, kind: str, name: str, summary: s
 
 
 def _upsert_relation_imported(db: Session, src: Entity, predicate: str, dst: Entity,
-                              attrs: dict | None = None) -> Relation:
+                              attrs: dict | None = None,
+                              product_scope: str | None = None) -> Relation:
     row = db.execute(select(Relation).where(
         Relation.tenant_id == settings.tenant_id, Relation.src_entity_id == src.id,
         Relation.predicate == predicate, Relation.dst_entity_id == dst.id)).scalar_one_or_none()
     if row is None:
         row = Relation(tenant_id=settings.tenant_id, src_entity_id=src.id, dst_entity_id=dst.id,
-                       predicate=predicate, attrs=attrs or {}, status="APPROVED", source="import")
+                       predicate=predicate, product_scope=product_scope,
+                       attrs=attrs or {}, status="APPROVED", source="import")
         db.add(row)
         db.flush()
+    elif product_scope and row.product_scope != product_scope:
+        row.product_scope = product_scope
+        db.add(row)
     return row
 
 
@@ -521,7 +665,7 @@ def import_structured_rules(db: Session, actor: dict) -> dict:
                                   attrs={"consumable": bool(item.get("consumable"))})
         parent = products.get(str(item.get("product_id") or ""))
         if parent is not None:
-            _upsert_relation_imported(db, entity, "PART_OF", parent)
+            _upsert_relation_imported(db, entity, "PART_OF", parent, product_scope=parent.code)
 
     parts: dict[str, Entity] = {}
     for item in warranty.get("rules") or []:
@@ -542,10 +686,11 @@ def import_structured_rules(db: Session, actor: dict) -> dict:
                                 attrs={"policy_kind": "warranty", "product_id": product_code,
                                        "component": component, "months": months})
         _upsert_relation_imported(db, part, "COVERED_BY", rule,
-                                  attrs={"product_id": product_code})
+                                  attrs={"product_id": product_code},
+                                  product_scope=product_code)
         parent = products.get(product_code)
         if parent is not None:
-            _upsert_relation_imported(db, part, "PART_OF", parent)
+            _upsert_relation_imported(db, part, "PART_OF", parent, product_scope=parent.code)
 
     # 故障现象来自 escalation 触发词；中文展示名取别名表的第一条说法（业务可维护）
     aliases_yaml = _load_yaml("escalation_aliases.yaml")
@@ -573,11 +718,25 @@ def import_structured_rules(db: Session, actor: dict) -> dict:
                                      attrs={"display_from": "escalation_aliases"})
             _upsert_relation_imported(db, fault, "ESCALATES_TO", rule)
 
+    # 政策里点名、但四期工具清单没有对应工具的处理动作：实体必须存在，
+    # 否则 GOVERNED_BY 会指向一个不存在的动作（悬空引用）。
+    for code, name in {"action.request_intercept_or_reroute": "物流拦截与改址"}.items():
+        _upsert_imported(db, code=code, kind="action", name=name,
+                         attrs={"tool": None, "handling": True})
+
     for rule_id, spec in (policy.get("rules") or {}).items():
-        _upsert_imported(db, code=str(rule_id), kind="policy",
-                         name=POLICY_LABELS.get(str(rule_id), str(rule_id)),
-                         attrs={"policy_kind": "policy",
-                                **(spec if isinstance(spec, dict) else {})})
+        rule = _upsert_imported(db, code=str(rule_id), kind="policy",
+                                name=POLICY_LABELS.get(str(rule_id), str(rule_id)),
+                                attrs={"policy_kind": "policy",
+                                       **(spec if isinstance(spec, dict) else {})})
+        action_key = _action_code(spec.get("action")) if isinstance(spec, dict) else ""
+        if not action_key:
+            continue
+        action = db.execute(select(Entity).where(
+            Entity.tenant_id == settings.tenant_id, Entity.code == action_key,
+            Entity.kind == "action")).scalar_one_or_none()
+        if action is not None:
+            _upsert_relation_imported(db, action, "GOVERNED_BY", rule)
 
     # 对话可触发的动作（与四期工具清单一一对应；语义由本仓库定义，不是业务规则）
     actions = {

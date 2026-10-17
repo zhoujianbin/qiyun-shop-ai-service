@@ -318,6 +318,8 @@ def _finish(db: Session, message: Message, status: str, content: str, *, latency
         meta["ontology"] = {
             "entities": [item.get("code") for item in (state.entities or [])],
             "product_scope": state.product_scope,
+            "boost": list(state.boost_entities or []),
+            "method": state.match_method,
             "expanded": state.expanded,
         }
         message.metadata_json = meta

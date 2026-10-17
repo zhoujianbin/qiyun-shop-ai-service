@@ -1,4 +1,5 @@
 import logging
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
@@ -13,12 +14,37 @@ from app.core.middleware import IdempotencyMiddleware, RequestContextMiddleware
 setup_logging()
 logger = logging.getLogger("app")
 
+
+def _warm_embedding() -> None:
+    """启动预热：把 12 秒的模型加载从"首个用户请求"挪到"服务启动后的后台线程"。
+
+    失败只告警，不影响服务可用性（真正调用时会再试一次并报明确错误）。
+    """
+    try:
+        from app.integrations import embedding
+
+        embedding.encode_query("预热")
+        logger.info("embedding 预热完成")
+    except Exception as exc:  # noqa: BLE001 - 预热失败不能阻塞服务
+        logger.warning("embedding 预热失败（首次检索会重新加载）：%s", exc)
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    # 同步预热：torch 在后台线程里首次加载曾出现 segfault（macOS/loky），
+    # 因此宁可让启动多花 ~12s，也不把风险留给首个请求与预热线程的并发。
+    if settings.app_env.lower() != "test" and settings.embedding_provider.lower() != "fake":
+        _warm_embedding()
+    yield
+
+
 app = FastAPI(
     title=settings.app_name,
     version=settings.app_version,
     description="栖云智家第一期企业电商基础平台 API",
     docs_url="/docs",
     openapi_url="/openapi.json",
+    lifespan=lifespan,
 )
 
 app.add_middleware(IdempotencyMiddleware)

@@ -4535,6 +4535,15 @@ paths:
           minimum: 1
           default: 1
           title: Depth
+      - name: product_scope
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            maxLength: 32
+          - type: 'null'
+          title: Product Scope
       responses:
         '200':
           description: Successful Response
@@ -10371,6 +10380,12 @@ components:
         predicate:
           type: string
           title: Predicate
+        product_scope:
+          anyOf:
+          - type: string
+            maxLength: 32
+          - type: 'null'
+          title: Product Scope
         weight:
           anyOf:
           - type: number
@@ -10407,6 +10422,11 @@ components:
         dst_entity_id:
           type: integer
           title: Dst Entity Id
+        product_scope:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Product Scope
         status:
           type: string
           title: Status

@@ -38,6 +38,7 @@ class RelationUpsert(BaseModel):
     src_entity_id: int
     dst_entity_id: int
     predicate: str
+    product_scope: str | None = Field(default=None, max_length=32)
     weight: float | None = None
     attrs: dict | None = None
     status: str | None = None
@@ -50,6 +51,7 @@ class RelationView(BaseModel):
     predicate: str
     src_entity_id: int
     dst_entity_id: int
+    product_scope: str | None = None
     status: str
 
 

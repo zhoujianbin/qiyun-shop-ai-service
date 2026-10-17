@@ -5,10 +5,11 @@ from app.core.errors import ValidationError
 from app.services import tool_registry
 
 
-def test_registry_has_nine_tools_with_seven_read_only():
-    assert len(tool_registry.TOOLS) == 9
+def test_registry_has_ten_tools_with_eight_read_only():
+    # 四期补丁：新增 query_my_orders（按身份列出本人订单）
+    assert len(tool_registry.TOOLS) == 10
     read_only = [name for name, spec in tool_registry.TOOLS.items() if spec.read_only]
-    assert len(read_only) == 7
+    assert len(read_only) == 8
     assert set(tool_registry.TOOLS) - set(read_only) == {"cancel_order", "create_after_sales"}
 
 
@@ -37,7 +38,7 @@ def test_validate_rejects_extra_and_missing_and_enum():
 def test_llm_tools_excludes_write_by_default_flag():
     names = [item["function"]["name"] for item in tool_registry.llm_tools(include_write=False)]
     assert "cancel_order" not in names and "query_order" in names
-    assert len(names) == 7
+    assert len(names) == 8
 
 
 def test_parse_arguments_rejects_bad_json():

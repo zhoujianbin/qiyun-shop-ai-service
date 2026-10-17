@@ -1077,6 +1077,7 @@ class Relation(Base):
     src_entity_id = mapped_column(BigInteger)
     dst_entity_id = mapped_column(BigInteger)
     predicate = mapped_column(Text)
+    product_scope = mapped_column(String(32))
     weight = mapped_column(Numeric(4, 2), server_default=text("1.00"))
     attrs = mapped_column(JSONB, server_default=text("'{}'::jsonb"))
     status = mapped_column(Text, server_default=text("'DRAFT'"))

@@ -132,6 +132,8 @@ class State:
     facts: list[dict] = field(default_factory=list)      # 四期：工具返回的事实块
     tool_calls: list[dict] = field(default_factory=list) # 四期：工具调用留痕（落 tool_call 表）
     entities: list[dict] = field(default_factory=list)   # 四期：本体归一结果
+    boost_entities: list[str] = field(default_factory=list)  # 四期：产品名宽松命中（仅排序）
+    match_method: str | None = None                       # exact | fuzzy
     product_scope: str | None = None                     # 四期：映射到二期已有过滤键
     expanded: bool = False                               # 四期：是否已做过一跳扩展
     degraded: bool = False
@@ -144,6 +146,8 @@ class State:
 # 一期种子单号是 QY…，测试用例里用 SO…；两种都要认，否则"查订单/取消订单"进不了工具分支
 ORDER_NO_RE = re.compile(r"\b(?:SO|QY)[0-9]{6,}\b")
 PRODUCT_WORDS = ("型号", "价格", "多少钱", "有货", "在售", "参数", "规格")
+# 只在"我的单据"这种表述下进工具分支；不加泛词"订单"，否则政策类问题也会白付一次模型往返
+MY_ORDER_WORDS = ("我订单", "我的订单", "订单里", "我的单", "我买的")
 MODEL_CODE_RE = re.compile(r"\bQ[LCHR]-[A-Z0-9]{2,}\b")
 
 
@@ -156,6 +160,8 @@ def classify_rule(question: str) -> str | None:
         return "REALTIME_FACT"
     if any(word in text for word in PRODUCT_WORDS):
         return "REALTIME_FACT"
+    if any(word in text for word in MY_ORDER_WORDS):
+        return "IDENTITY_REQUEST"
     if any(word in text for word in REALTIME_WORDS):
         return "REALTIME_FACT"
     if any(word in text for word in IDENTITY_WORDS):
@@ -232,6 +238,8 @@ def normalize(db: Session, state: State) -> State:
         result = {"entities": [], "product_scope": None}
     state.entities = result.get("entities") or []
     state.product_scope = result.get("product_scope")
+    state.boost_entities = [item["code"] for item in (result.get("boost_entities") or [])]
+    state.match_method = result.get("method")
     # 归一不是一次检索，不写 retrieval_trace；结果随消息元数据留痕
     return state
 
@@ -302,6 +310,8 @@ TOOL_SYSTEM_PROMPT = (
     "不得推测失败原因，不得描述订单号格式、前缀或任何业务规则。"
     "只要用户给出了订单号且会话已通过核验，就必须调用订单类工具去查，"
     "不要重复索要订单号或手机号后四位。"
+    "用户提到自己的订单但没给订单号时，先调 query_my_orders 列出并按商品名过滤，"
+    "不要直接索要订单号。"
 )
 
 
@@ -510,9 +520,9 @@ def rank_by_ontology(db: Session, state: State) -> State:
     这是"本体影响检索"的兜底手段——二期 product_scope 未回填时，过滤条件用不上，
     但切片映射（chunk_entity）是四期自己可控的，可以稳定地改变排序。
     """
-    if not state.hits or not state.entities:
+    if not state.hits or (not state.entities and not state.boost_entities):
         return state
-    entity_codes = {item["code"] for item in state.entities}
+    entity_codes = {item["code"] for item in state.entities} | set(state.boost_entities)
     try:
         boosted, rest = [], []
         for hit in state.hits:
@@ -753,7 +763,9 @@ def finalize(db: Session, state: State, *, history: list[dict]) -> State:
             state.prompt_messages = [
                 {"role": "system", "content": (
                     "你是栖云智家客服助手。只依据下方知识作答，不编造参数/时限/金额；"
-                    "不确定就说明并建议转人工。回答不超过 300 字。\n\n" + context
+                    "不确定就说明并建议转人工。回答不超过 300 字。"
+                    "不要向用户展示内部规则编号（ESC-/WARRANTY-/SYM-/QUALITY- 等开头），"
+                    "需要指代时用业务说法，例如“升级到热异常处理流程”。\n\n" + context
                 )},
                 *history,
                 {"role": "user", "content": prefix + guard + state.question},
