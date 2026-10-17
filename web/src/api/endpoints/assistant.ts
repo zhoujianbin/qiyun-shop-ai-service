@@ -2,8 +2,19 @@ import { api, API_BASE } from '../client';
 import { tokenStore } from '../tokenStore';
 import { newRequestId } from '../requestId';
 import type {
-  ChatMessage, Citation, Conversation, ConversationPage, Handoff, IdentityResult, MessagePage, StreamEvent,
+  ChatMessage, Citation, Conversation, ConversationPage, Handoff, IdentityResult, MessagePage,
+  PendingAction, StreamEvent,
 } from '@/types/assistant';
+
+/** 四期：确认待确认动作（真正提交写操作）。 */
+export function confirmAction(actionId: number): Promise<PendingAction> {
+  return api.post<PendingAction>(`/ai/actions/${actionId}/confirm`);
+}
+
+/** 四期：取消待确认动作（不改业务数据）。 */
+export function cancelAction(actionId: number): Promise<PendingAction> {
+  return api.post<PendingAction>(`/ai/actions/${actionId}/cancel`);
+}
 
 /** 读取 SSE：fetch + ReadableStream（EventSource 不能带 Authorization）。 */
 export async function streamChat(
@@ -83,6 +94,11 @@ export const assistantApi = {
     api.post<Record<string, unknown>>(`/ai/messages/${messageId}/feedback`, body),
   trace: (messageId: number | string) =>
     api.get<Array<Record<string, unknown>>>(`/ai/messages/${messageId}/trace`),
+  // 四期：待确认动作
+  confirmAction,
+  cancelAction,
+  conversationActions: (id: number | string) =>
+    api.get<{ items: PendingAction[]; meta: Record<string, number> }>(`/ai/conversations/${id}/actions`),
 };
 
 export type { Citation };

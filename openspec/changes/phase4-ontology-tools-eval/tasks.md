@@ -60,11 +60,11 @@
 
 ## 8 流式事件与前端
 
-- [ ] 8.1 新增 `tool` 事件（`{name,status,latency_ms}`）与 `action` 事件（`{id,tool,summary,impact,irreversible,expires_at}`）；验证：`G1`、`G3`
-- [ ] 8.2 B2 叙述缓冲：带 `tools` 轮次的 `content` 先缓冲，按 `finish_reason` 分支下发；验证：`G3`
-- [ ] 8.3 `web/src/types/assistant.ts` 的 `StreamEvent` 6 → 8；确认卡片 + 事实卡片组件；验证：`A2`、`A3`
+- [x] 8.1 新增 `tool` 事件（`{name,status,latency_ms}`）与 `action` 事件（`{id,tool,summary,impact,irreversible,expires_at}`）；验证：`G1`、`G3`
+- [x] 8.2 B2 叙述缓冲：带 `tools` 轮次的 `content` 先缓冲，按 `finish_reason` 分支下发；验证：`G3`
+- [x] 8.3 `web/src/types/assistant.ts` 的 `StreamEvent` 6 → 8；确认卡片 + 事实卡片组件；验证：`A2`、`A3`
 - [ ] 8.4 知识后台新增本体页（列表 + 审核 + 图谱深度 2 查看）；验证：`A3`
-- [ ] 8.5 重导出 `openapi.json`/`openapi.yaml`；验证：`A2`
+- [x] 8.5 重导出 `openapi.json`/`openapi.yaml`；验证：`A2`
 
 ## 9 评测闭环
 

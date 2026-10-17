@@ -66,10 +66,30 @@ export interface IdentityResult {
   snapshot?: Record<string, string | null>;
 }
 
+/** 四期：待确认动作（写工具只生成它，不直接改单）。 */
+export interface PendingAction {
+  id: number;
+  conversation_id: number;
+  message_id: number;
+  tool: string;
+  args: Record<string, unknown>;
+  summary: string;
+  impact?: string | null;
+  irreversible: boolean;
+  status: 'PROPOSED' | 'CONFIRMED' | 'EXECUTED' | 'FAILED' | 'EXPIRED' | 'CANCELLED';
+  expires_at?: string | null;
+  executed_at?: string | null;
+  result?: Record<string, unknown> | null;
+  error_code?: string | null;
+  created_at?: string | null;
+}
+
 export type StreamEvent =
   | { name: 'meta'; data: Record<string, unknown> }
   | { name: 'ping'; data: Record<string, unknown> }
+  | { name: 'tool'; data: { name: string; status: 'ok' | 'failed'; latency_ms?: number | null } }
   | { name: 'delta'; data: { text: string } }
+  | { name: 'action'; data: PendingAction }
   | { name: 'citations'; data: { hits: Citation[] } }
   | { name: 'done'; data: Record<string, unknown> }
   | { name: 'error'; data: { code: string; message: string; request_id?: string } };

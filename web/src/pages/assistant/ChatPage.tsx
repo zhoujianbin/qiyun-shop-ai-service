@@ -20,7 +20,7 @@ import { queryClient } from '@/app/providers';
 import { EmptyState } from '@/components/common/EmptyState';
 import { PageHeader } from '@/components/common/PageHeader';
 import { ROUTES } from '@/constants/routes';
-import type { ChatMessage, Citation, Conversation } from '@/types/assistant';
+import type { ChatMessage, Citation, Conversation, PendingAction } from '@/types/assistant';
 
 const QUICK_QUESTIONS = ['门锁没电了怎么办', '七天无理由退货条件', '摄像头陌生人访问怎么处理'];
 const DISLIKE_REASONS = [
@@ -49,6 +49,9 @@ export default function ChatPage() {
   const [sending, setSending] = useState(false);
   const [feedback, setFeedback] = useState<Record<number, string>>({});
   const [dislikeFor, setDislikeFor] = useState<number | null>(null);
+  // 四期：待确认动作（写工具只生成它，确认后才真正提交）
+  const [pending, setPending] = useState<PendingAction | null>(null);
+  const [acting, setActing] = useState(false);
   const answerIdRef = useRef<number | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
@@ -135,6 +138,8 @@ export default function ChatPage() {
           setThinking(false);
           answer += event.data.text;
           setStreaming(answer);
+        } else if (event.name === 'action') {
+          setPending(event.data);
         } else if (event.name === 'citations') {
           setCitations(event.data.hits ?? []);
         } else if (event.name === 'error') {
@@ -278,6 +283,65 @@ export default function ChatPage() {
                     {streaming}
                   </div>
                 </div>
+              ) : null}
+              {pending ? (
+                <Card size="small" style={{ marginBottom: 12, borderColor: '#faad14' }}>
+                  <Space direction="vertical" style={{ width: '100%' }} size={4}>
+                    <Typography.Text strong>需要你确认：{pending.summary}</Typography.Text>
+                    {pending.impact ? (
+                      <Typography.Text type="secondary">{pending.impact}</Typography.Text>
+                    ) : null}
+                    <Space size={8} wrap>
+                      <Tag color={pending.irreversible ? 'red' : 'green'}>
+                        {pending.irreversible ? '确认后不可撤销' : '可在售后页撤销'}
+                      </Tag>
+                      <Typography.Text type="secondary">
+                        状态 {pending.status}
+                        {pending.expires_at ? ` · 有效期至 ${formatTime(pending.expires_at)}` : ''}
+                      </Typography.Text>
+                    </Space>
+                    {pending.status === 'PROPOSED' ? (
+                      <Space>
+                        <Button
+                          type="primary"
+                          loading={acting}
+                          onClick={async () => {
+                            setActing(true);
+                            try {
+                              const updated = await assistantApi.confirmAction(pending.id);
+                              setPending(updated);
+                              message.success('已提交');
+                              await messages.refetch();
+                            } catch (error) {
+                              message.error((error as Error).message || '确认失败');
+                            } finally {
+                              setActing(false);
+                            }
+                          }}
+                        >
+                          确认执行
+                        </Button>
+                        <Button
+                          loading={acting}
+                          onClick={async () => {
+                            setActing(true);
+                            try {
+                              const updated = await assistantApi.cancelAction(pending.id);
+                              setPending(updated);
+                              message.info('已取消，未做任何改动');
+                            } catch (error) {
+                              message.error((error as Error).message || '取消失败');
+                            } finally {
+                              setActing(false);
+                            }
+                          }}
+                        >
+                          取消
+                        </Button>
+                      </Space>
+                    ) : null}
+                  </Space>
+                </Card>
               ) : null}
               {citations.length > 0 ? (
                 <Collapse

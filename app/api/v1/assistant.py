@@ -213,6 +213,11 @@ def stream_message(conversation_id: int, payload: StreamRequest, request: Reques
         yield _sse("meta", {"conversation_id": conversation_id, "message_id": answer.id,
                             "seq": answer.seq, "decision": state.decision,
                             "intent": state.intent})
+        # 四期：工具状态先于任何文本增量，前端据此显示"正在查询…"
+        for call in state.tool_calls or []:
+            yield _sse("tool", {"name": call.get("tool_name"),
+                                "status": "failed" if call.get("status") != "OK" else "ok",
+                                "latency_ms": call.get("latency_ms")})
         collected: list[str] = []
         last_flush = time.monotonic()
         try:
