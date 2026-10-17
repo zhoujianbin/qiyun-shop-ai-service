@@ -167,9 +167,12 @@ def stream_message(conversation_id: int, payload: StreamRequest, request: Reques
 
     history = conversation_service.context_messages(db, conversation_id)
     started = time.monotonic()
+    permissions = request_permissions(request, db, user)
     state = assistant_graph.run(db, content, actor=actor, history=history[:-1],
                                 identity_level=payload.identity_level,
-                                conversation_id=conversation_id)
+                                conversation_id=conversation_id,
+                                permissions=permissions, conversation=conversation,
+                                message_id=answer.id)
 
     # 自动转人工：高风险规则命中 / 同一问题第二次仍无命中
     if state.guard_hints:
@@ -226,6 +229,8 @@ def stream_message(conversation_id: int, payload: StreamRequest, request: Reques
         text = "".join(collected)
         status = "REFUSED" if state.decision in ("CLARIFY", "REFUSE") else ("DONE" if text else "FAILED")
         _finish(db, answer, status, text, latency_ms=_elapsed(started), state=state)
+        if state.pending_action:
+            yield _sse("action", state.pending_action)
         yield _sse("citations", {"hits": state.citations})
         yield _sse("done", {"status": status, "latency_ms": _elapsed(started),
                             "intent": state.intent, "decision": state.decision,
@@ -238,9 +243,22 @@ def _elapsed(started: float) -> int:
     return int((time.monotonic() - started) * 1000)
 
 
+def _mask_args(args: dict) -> dict:
+    """工具参数脱敏：订单号只留前缀，其余敏感键直接丢弃。"""
+    masked: dict = {}
+    for key, value in (args or {}).items():
+        if key == "order_no" and isinstance(value, str):
+            masked[key] = value[:6] + "****" if len(value) > 6 else "****"
+        elif key in ("phone_tail", "receiver_phone"):
+            continue
+        else:
+            masked[key] = value
+    return masked
+
+
 def _finish(db: Session, message: Message, status: str, content: str, *, latency_ms: int,
             state: "assistant_graph.State | None" = None) -> None:
-    from app.models.generated import Citation, RetrievalTrace
+    from app.models.generated import Citation, RetrievalTrace, ToolCall
 
     message.status = status
     message.content = content
@@ -271,6 +289,14 @@ def _finish(db: Session, message: Message, status: str, content: str, *, latency
                 snippet=citation.get("snippet"),
                 rank=citation["rank"],
                 entity_tags=citation.get("entity_tags") or [],
+            ))
+        for call in state.tool_calls or []:
+            db.add(ToolCall(
+                tenant_id=message.tenant_id, message_id=message.id,
+                conversation_id=message.conversation_id, tool_name=call.get("tool_name") or "unknown",
+                args=_mask_args(call.get("args") or {}), status=call.get("status") or "OK",
+                latency_ms=call.get("latency_ms"), error_code=call.get("error_code"),
+                proposal_id=(state.pending_action or {}).get("id") if state.pending_action else None,
             ))
         for observation in state.observations:
             db.add(RetrievalTrace(
@@ -347,6 +373,53 @@ def ConversationNotFound():
     return NotFound("消息不存在或不可见")
 
 # ---------------------------------------------------------------- 身份核验 / 转人工
+# ---------------------------------------------------------------- 待确认动作（四期）
+@router.get("/actions/{action_id}")
+def get_action(action_id: int, request: Request, db: Session = Depends(get_db),
+               user: AppUser = Depends(get_current_user)) -> dict:
+    from app.services import action as action_service
+
+    row = action_service.get_action(db, action_id)
+    conversation = conversation_service.ensure_visible(
+        db, row["conversation_id"], actor=actor_of(request, user, db),
+        staff=_staff(request, db, user))
+    return row
+
+
+@router.get("/conversations/{conversation_id}/actions")
+def list_actions(conversation_id: int, request: Request, db: Session = Depends(get_db),
+                 user: AppUser = Depends(get_current_user)) -> dict:
+    from app.services import action as action_service
+
+    conversation_service.ensure_visible(
+        db, conversation_id, actor=actor_of(request, user, db), staff=_staff(request, db, user))
+    return action_service.list_actions(db, conversation_id)
+
+
+@router.post("/actions/{action_id}/confirm")
+def confirm_action(action_id: int, request: Request, db: Session = Depends(get_db),
+                   user: AppUser = Depends(get_current_user)) -> dict:
+    from app.services import action as action_service
+
+    actor = actor_of(request, user, db)
+    row = action_service.get_action(db, action_id)
+    conversation_service.ensure_visible(
+        db, row["conversation_id"], actor=actor, staff=_staff(request, db, user))
+    return action_service.confirm(db, actor, action_id)
+
+
+@router.post("/actions/{action_id}/cancel")
+def cancel_action(action_id: int, request: Request, db: Session = Depends(get_db),
+                  user: AppUser = Depends(get_current_user)) -> dict:
+    from app.services import action as action_service
+
+    actor = actor_of(request, user, db)
+    row = action_service.get_action(db, action_id)
+    conversation_service.ensure_visible(
+        db, row["conversation_id"], actor=actor, staff=_staff(request, db, user))
+    return action_service.cancel(db, actor, action_id)
+
+
 @router.post("/conversations/{conversation_id}/identity")
 def verify_identity(conversation_id: int, payload: IdentityRequest, request: Request,
                     db: Session = Depends(get_db),

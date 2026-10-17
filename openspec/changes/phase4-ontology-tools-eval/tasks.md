@@ -44,12 +44,12 @@
 
 ## 6 写操作与确认
 
-- [ ] 6.1 `app/services/action.py`：propose（生成 `PROPOSED` + `action_key=sha256(tool+归一化参数)`）、confirm（CAS）、cancel、过期判定；验证：`E1`、`E2`、`E3`、`E6`
-- [ ] 6.2 两个写工具接 `order.cancel` / `aftersales.create`；确认卡片摘要复用 `order_fact_snapshot` 6 字段白名单；验证：`E7`（无 PII）
-- [ ] 6.3 频次闸：单会话写 ≤3、同一 order 24h 取消 ≤1；单轮仅 1 写；验证：`E8`、`D7`
-- [ ] 6.4 三时点审计 + 四类 outbox 事件；验证：`E4`、`E5`
-- [ ] 6.5 接口 `POST /ai/actions/{id}/confirm`、`/cancel`、`GET /ai/actions/{id}`、`GET /ai/conversations/{id}/actions`；写接口带 `Idempotency-Key`；验证：重复 confirm 幂等（`E3`）
-- [ ] 6.6 写失败不自动重试 + "未做任何改动"话术；验证：`E9`
+- [x] 6.1 `app/services/action.py`：propose（生成 `PROPOSED` + `action_key=sha256(tool+归一化参数)`）、confirm（CAS）、cancel、过期判定；验证：`E1`、`E2`、`E3`、`E6`
+- [x] 6.2 两个写工具接 `order.cancel` / `aftersales.create`；确认卡片摘要复用 `order_fact_snapshot` 6 字段白名单；验证：`E7`（无 PII）
+- [x] 6.3 频次闸：单会话写 ≤3、同一 order 24h 取消 ≤1；单轮仅 1 写；验证：`E8`、`D7`
+- [x] 6.4 三时点审计 + 四类 outbox 事件；验证：`E4`、`E5`
+- [x] 6.5 接口 `POST /ai/actions/{id}/confirm`、`/cancel`、`GET /ai/actions/{id}`、`GET /ai/conversations/{id}/actions`；写接口带 `Idempotency-Key`；验证：重复 confirm 幂等（`E3`）
+- [x] 6.6 写失败不自动重试 + "未做任何改动"话术；验证：`E9`
 
 ## 7 核验门禁与 F21
 

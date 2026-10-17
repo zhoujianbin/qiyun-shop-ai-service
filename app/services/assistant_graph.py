@@ -22,7 +22,9 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.core.errors import AppError
 from app.models.generated import Rule
+from app.services import action as action_service
 from app.services import assistant_handoff, knowledge_retrieval, ontology, tool_registry
 from app.services.tool_registry import ToolSpec, TOOLS
 
@@ -40,6 +42,7 @@ HUMAN_WORDS = ("转人工", "人工客服", "真人", "找客服", "叫客服")
 REALTIME_WORDS = ("到哪了", "到哪儿", "几天能到", "还有多少库存", "现在什么状态", "实时")
 IDENTITY_WORDS = ("我的订单", "退款进度", "物流", "快递", "发票", "绑定", "我的设备")
 IDENTITY_REQUEST_TEXT = "需要先核验身份：请提供订单号与下单手机号后四位。"
+ACTION_PENDING_TEXT = "请确认下面的操作，我才会真正提交；未确认前不会改动订单。"
 
 # escalation 规则的 triggers 是英文标识符，用户提问是中文——必须配中文别名表才可能命中。
 # 真源：knowledge_raw/13_结构化规则/escalation_aliases.yaml（业务可维护）；
@@ -123,6 +126,7 @@ class State:
     guard_hints: list[str] = field(default_factory=list)
     prompt_messages: list[dict] = field(default_factory=list)
     conversation_id: int | None = None                   # 四期：核验门禁需要会话上下文
+    pending_action: dict | None = None                   # 四期：待确认动作（写工具）
     facts: list[dict] = field(default_factory=list)      # 四期：工具返回的事实块
     tool_calls: list[dict] = field(default_factory=list) # 四期：工具调用留痕（落 tool_call 表）
     entities: list[dict] = field(default_factory=list)   # 四期：本体归一结果
@@ -285,14 +289,17 @@ TOOL_SYSTEM_PROMPT = (
 
 
 def tool_loop(db: Session, state: State, *, actor: dict | None, identity_level: str,
-              history: list[dict], max_calls: int = 3) -> State:
+              history: list[dict], max_calls: int = 3, permissions: set[str] | None = None,
+              conversation: object | None = None, message_id: int | None = None) -> State:
     """工具分支：模型选工具 → 参数校验 → 核验门禁 → 执行 → 事实回填。
 
-    只放行只读工具；写工具在 action 服务接好之前不暴露给模型。
+    写工具只生成待确认动作（不执行），且要求对应 tool:write:* 能力码。
     """
     from app.integrations import llm
 
-    schemas = tool_registry.llm_tools(include_write=False)
+    permissions = permissions or set()
+    allow_write = bool(permissions & set(action_service.WRITE_TOOL_PERMISSION.values()))
+    schemas = tool_registry.llm_tools(include_write=allow_write)
     messages = [{"role": "system", "content": TOOL_SYSTEM_PROMPT}, *history,
                 {"role": "user", "content": state.question}]
     calls = 0
@@ -312,7 +319,7 @@ def tool_loop(db: Session, state: State, *, actor: dict | None, identity_level: 
             name = function.get("name")
             spec = TOOLS.get(name)
             started = time.monotonic()
-            if spec is None or not spec.read_only:
+            if spec is None or (not spec.read_only and not allow_write):
                 state.tool_calls.append({"tool_name": name or "unknown", "args": {},
                                          "status": "REJECTED",
                                          "error_code": "TOOL_NOT_ALLOWED",
@@ -343,6 +350,39 @@ def tool_loop(db: Session, state: State, *, actor: dict | None, identity_level: 
                                              "status": "REJECTED",
                                              "error_code": "IDENTITY_REQUIRED", "latency_ms": 0})
                     return state
+            if not spec.read_only:
+                needed = action_service.WRITE_TOOL_PERMISSION.get(spec.name)
+                if needed and needed not in permissions:
+                    state.tool_calls.append({"tool_name": spec.name, "args": args,
+                                             "status": "REJECTED", "error_code": "PERM_FORBIDDEN",
+                                             "latency_ms": 0})
+                    return state
+                if conversation is None or message_id is None:
+                    state.tool_calls.append({"tool_name": spec.name, "args": args,
+                                             "status": "REJECTED", "error_code": "NO_CONTEXT",
+                                             "latency_ms": 0})
+                    return state
+                try:
+                    snapshot = None
+                    try:
+                        found = tool_registry.resolve_order(db, actor or {}, args.get("order_no"))
+                        snapshot = {"status": found.status, "order_no": found.order_no}
+                    except Exception:  # noqa: BLE001 - 快照失败不影响生成动作
+                        snapshot = None
+                    state.pending_action = action_service.propose(
+                        db, actor or {}, conversation=conversation, message_id=message_id,
+                        tool_name=spec.name, args=args, facts=snapshot)
+                except AppError as exc:
+                    state.tool_calls.append({"tool_name": spec.name, "args": args,
+                                             "status": "REJECTED", "error_code": exc.code,
+                                             "latency_ms": 0})
+                    state.facts.append({"tool": spec.name, "ok": False, "error_code": exc.code,
+                                        "message": exc.message})
+                    return state
+                state.tool_calls.append({"tool_name": spec.name, "args": args, "status": "OK",
+                                         "error_code": None, "latency_ms": 0})
+                state.decision = "ACTION_PROPOSED"
+                return state
             try:
                 result = spec.run(db, {"question": state.question, "actor": actor,
                                        "identity_level": identity_level,
@@ -569,7 +609,7 @@ def _fact_block(state: State) -> str:
 
 
 def finalize(db: Session, state: State, *, history: list[dict]) -> State:
-    if state.decision == "IDENTITY_REQUEST":
+    if state.decision in ("IDENTITY_REQUEST", "ACTION_PROPOSED"):
         state.citations = []
         state.prompt_messages = []
         return state
@@ -627,14 +667,17 @@ def finalize(db: Session, state: State, *, history: list[dict]) -> State:
 
 
 def run(db: Session, question: str, *, actor: dict | None, history: list[dict],
-        identity_level: str = "public", conversation_id: int | None = None) -> State:
+        identity_level: str = "public", conversation_id: int | None = None,
+        permissions: set[str] | None = None, conversation: object | None = None,
+        message_id: int | None = None) -> State:
     """跑一遍编排；返回最终 state（decision/citations/prompt_messages）。"""
     state = State(question=question, conversation_id=conversation_id)
     normalize(db, state)
     plan(state)
     if state.decision == "ANSWER" and state.plan and state.plan[0] == "tool":
-        tool_loop(db, state, actor=actor, identity_level=identity_level, history=history)
-        if state.decision == "IDENTITY_REQUEST" or state.facts:
+        tool_loop(db, state, actor=actor, identity_level=identity_level, history=history,
+                  permissions=permissions, conversation=conversation, message_id=message_id)
+        if state.decision in ("IDENTITY_REQUEST", "ACTION_PROPOSED") or state.facts:
             return finalize(db, state, history=history)
         # 工具没给出事实：回退到知识检索，行为与三期一致
     while state.steps < MAX_STEPS and state.decision == "ANSWER" and not state.hits:
@@ -655,6 +698,7 @@ def fixed_answer(state: State) -> str:
         "HANDOFF": HANDOFF_TEXT,
         "SCOPE": SCOPE_TEXT,
         "IDENTITY_REQUEST": IDENTITY_REQUEST_TEXT,
+        "ACTION_PROPOSED": ACTION_PENDING_TEXT,
         "CLARIFY": CLARIFY_TEXT,
         "REFUSE": REFUSE_TEXT,
         "ANSWER": "",
