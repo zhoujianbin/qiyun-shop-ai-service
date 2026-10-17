@@ -22,5 +22,3 @@ python-docx>=1.1
 sentence-transformers>=3.0
 torch>=2.2
 
-# 三期：智能客服编排（LangGraph 会带入 langchain-core，但业务代码不直接使用 langchain 抽象）
-langgraph>=1.0

@@ -1,4 +1,4 @@
-"""三期 RAG 编排：plan → execute ⇄ replan → finalize（LangGraph，一条件边）。
+"""三期 RAG 编排：plan → execute ⇄ replan → finalize（手写编排循环，不引图框架）。
 
 边界（design 决策 3）：
 - 计划 ≤2 步；最大 4 步；最多 1 次 replan；总超时 30s。
