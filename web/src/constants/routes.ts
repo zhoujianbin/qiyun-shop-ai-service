@@ -51,6 +51,7 @@ export const ROUTES = {
   knowledgeReview: '/admin/knowledge/review',
   knowledgeRetrieval: '/admin/knowledge/retrieval-test',
   knowledgeGovernance: '/admin/knowledge/governance',
+  knowledgeOntology: '/admin/knowledge/ontology',
 
   // 三期：智能客服
   assistant: '/assistant',

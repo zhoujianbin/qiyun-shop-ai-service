@@ -1,8 +1,9 @@
 import { api } from '../client';
 import type {
   ChunkPage, ChunkPreviewItem, DocumentPage, GovernanceReport, ImportJob, KnowledgeChunk,
-  KnowledgeDocument, KnowledgeOverview, KnowledgeRule, KnowledgeVersion, PublishResult,
-  RetrievalResult, ReviewComment, ReviewTask, RuleConflict, RuleImportResult,
+  KnowledgeDocument, KnowledgeOverview, KnowledgeRule, KnowledgeVersion, OntologyEntity,
+  OntologyGraph, OntologyRelation, PublishResult, RetrievalResult, ReviewComment, ReviewTask,
+  RuleConflict, RuleImportResult,
 } from '@/types/knowledge';
 
 /** 多文件上传：字段名固定 files（后端一次请求多文件）。 */
@@ -69,6 +70,25 @@ export const knowledgeApi = {
     identity_level: string;
   }) => api.post<RetrievalResult>('/knowledge/retrieval/test', body),
   governanceReport: () => api.get<GovernanceReport>('/knowledge/governance/report'),
+
+  // 四期：本体
+  ontologyEntities: (params: Record<string, unknown> = {}) =>
+    api.get<{ items: OntologyEntity[]; meta: Record<string, number> }>(
+      '/knowledge/ontology/entities', { params }),
+  ontologyRelations: (params: Record<string, unknown> = {}) =>
+    api.get<{ items: OntologyRelation[]; meta: Record<string, number> }>(
+      '/knowledge/ontology/relations', { params }),
+  ontologyGraph: (entityId: number, depth = 2) =>
+    api.get<OntologyGraph>('/knowledge/ontology/graph',
+      { params: { entity_id: entityId, depth } }),
+  ontologyReview: (entityIds: number[], action: 'approve' | 'deprecate' = 'approve') =>
+    api.post<{ updated: number; status: string }>('/knowledge/ontology/review',
+      { entity_ids: entityIds, action }),
+  ontologyImport: () =>
+    api.post<{ total_entity: number; total_relation: number }>('/knowledge/ontology/import'),
+  ontologyBackfill: () =>
+    api.post<{ inserted: number; scanned: number }>('/knowledge/ontology/chunks/backfill'),
+  ontologyRelink: () => api.post<{ relinked: number }>('/knowledge/ontology/chunks/relink'),
 };
 
 export type { KnowledgeChunk };

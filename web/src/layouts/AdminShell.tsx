@@ -118,6 +118,7 @@ const MENU: MenuEntry[] = [
       { key: ROUTES.knowledgeReview, label: '审核队列', permission: P.knowledgeReviewRead },
       { key: ROUTES.knowledgeRetrieval, label: '检索测试', permission: P.knowledgeRetrievalTest },
       { key: ROUTES.knowledgeGovernance, label: '治理看板', permission: P.knowledgeGovernanceRead },
+      { key: ROUTES.knowledgeOntology, label: '本体维护', permission: P.ontologyRead },
     ],
   },
   {

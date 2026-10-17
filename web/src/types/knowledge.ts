@@ -215,3 +215,37 @@ export interface KnowledgeOverview {
   conflicts: number;
   governance: Record<string, number>;
 }
+/** 四期：本体实体/关系/图。 */
+export interface OntologyEntity {
+  id: number;
+  code: string;
+  kind: string;
+  name: string;
+  summary?: string | null;
+  status: 'DRAFT' | 'APPROVED' | 'DEPRECATED';
+  source?: string | null;
+  attrs?: Record<string, unknown>;
+}
+
+export interface OntologyRelation {
+  id: number;
+  predicate: string;
+  src_entity_id: number;
+  dst_entity_id: number;
+  src_code?: string | null;
+  dst_code?: string | null;
+  status: string;
+}
+
+export interface OntologyGraphNode {
+  entity: OntologyEntity;
+  depth: number;
+  via: string;
+}
+
+export interface OntologyGraph {
+  root: OntologyEntity;
+  nodes: OntologyGraphNode[];
+  edge_count: number;
+  depth: number;
+}
