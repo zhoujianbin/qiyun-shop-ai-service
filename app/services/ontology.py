@@ -25,6 +25,16 @@ from app.services.common import list_payload, now
 logger = logging.getLogger(__name__)
 
 KINDS = ("product", "accessory", "part", "fault", "action", "policy")
+
+# 部件编码的中文名，来自 KB-WARRANTY-001《产品与部件保修矩阵》（只是翻译，不是新规则）
+PART_LABELS = {
+    "lock_body_and_electronics": "锁体及电子部件",
+    "lock_cylinder": "锁芯",
+    "main_unit": "主机",
+    "robot_and_dock": "主机及基站",
+    "battery": "电池",
+    "lamp_and_driver": "灯体及驱动",
+}
 PREDICATES = ("PART_OF", "SYMPTOM_OF", "REMEDY", "COVERED_BY", "GOVERNED_BY", "ESCALATES_TO", "ALIAS_OF")
 STATUSES = ("DRAFT", "APPROVED", "DEPRECATED")
 MAX_DEPTH = 2
@@ -505,11 +515,13 @@ def import_structured_rules(db: Session, actor: dict) -> dict:
             continue
         part = parts.get(component)
         if part is None:
-            part = _upsert_imported(db, code=component, kind="part", name=component)
+            part = _upsert_imported(db, code=component, kind="part",
+                                    name=PART_LABELS.get(component, component))
             parts[component] = part
         months = item.get("months")
+        component_cn = PART_LABELS.get(component, component)
         rule = _upsert_imported(db, code=rule_id, kind="policy",
-                                name=f"{product_code} {component} 保修 {months} 个月",
+                                name=f"{product_code} · {component_cn} 保修 {months} 个月",
                                 attrs={"policy_kind": "warranty", "product_id": product_code,
                                        "component": component, "months": months})
         _upsert_relation_imported(db, part, "COVERED_BY", rule,
@@ -518,15 +530,26 @@ def import_structured_rules(db: Session, actor: dict) -> dict:
         if parent is not None:
             _upsert_relation_imported(db, part, "PART_OF", parent)
 
-    # 故障现象来自 escalation 触发词；升级矩阵本身作为政策实体
+    # 故障现象来自 escalation 触发词；中文展示名取别名表的第一条说法（业务可维护）
+    aliases_yaml = _load_yaml("escalation_aliases.yaml")
+
+    def fault_display(trigger: str) -> str:
+        words = aliases_yaml.get(trigger) or []
+        return str(words[0]) if words else str(trigger)
+
+    # 升级矩阵本身作为政策实体
     for rule_id, spec in (escalation.get("rules") or {}).items():
+        triggers_cn = [fault_display(str(t)) for t in (spec.get("triggers") or [])]
+        display = f"{spec.get('priority') or ''} 升级：{'/'.join(triggers_cn[:3]) or rule_id}".strip()
         rule = _upsert_imported(db, code=str(rule_id), kind="policy",
-                                name=str(rule_id),
+                                name=display,
                                 attrs={"policy_kind": "escalation", "priority": spec.get("priority"),
                                        "response_minutes": spec.get("response_minutes"),
                                        "prohibit": spec.get("prohibit") or []})
         for trigger in spec.get("triggers") or []:
-            fault = _upsert_imported(db, code=str(trigger), kind="fault", name=str(trigger))
+            fault = _upsert_imported(db, code=str(trigger), kind="fault",
+                                     name=fault_display(str(trigger)),
+                                     attrs={"display_from": "escalation_aliases"})
             _upsert_relation_imported(db, fault, "ESCALATES_TO", rule)
 
     for rule_id, spec in (policy.get("rules") or {}).items():
@@ -546,7 +569,6 @@ def import_structured_rules(db: Session, actor: dict) -> dict:
         _upsert_imported(db, code=code, kind="action", name=name, attrs={"tool": code.split(".", 1)[1]})
 
     # 故障现象的中文别名（来自 escalation_aliases.yaml，业务可维护）
-    aliases_yaml = _load_yaml("escalation_aliases.yaml")
     for fault_code, words in (aliases_yaml or {}).items():
         fault = db.execute(select(Entity).where(
             Entity.tenant_id == settings.tenant_id, Entity.code == str(fault_code),

@@ -16,6 +16,16 @@ const KIND_LABEL: Record<string, string> = {
   product: '产品', accessory: '配件', part: '部件', fault: '故障', policy: '政策', action: '动作',
 };
 const LABEL_KINDS = new Set(['product', 'part', 'accessory']);
+const CJK = /[\u4e00-\u9fa5]/;
+
+/** 有中文名就用中文名，部件这类英文编码仍显示编码。 */
+function displayName(entity: OntologyEntity): string {
+  return CJK.test(entity.name ?? '') ? entity.name : entity.code;
+}
+
+function clip(text: string, max = 18): string {
+  return text.length > max ? text.slice(0, max) + '…' : text;
+}
 
 interface Positioned {
   entity: OntologyEntity;
@@ -194,15 +204,35 @@ export default function OntologyGraph({ entities, relations, width = 980, height
                   <title>{`${node.entity.code} · ${node.entity.name}（${node.entity.status}）`}</title>
                 </circle>
                 {showLabel ? (
-                  <text
-                    x={node.x} y={node.y - 10}
-                    fontSize={9}
-                    textAnchor="middle"
-                    fill={dim ? '#bfbfbf' : '#595959'}
-                    pointerEvents="none"
-                  >
-                    {node.entity.code.length > 22 ? `${node.entity.code.slice(0, 22)}…` : node.entity.code}
-                  </text>
+                  <g pointerEvents="none">
+                    <text
+                      x={node.x}
+                      y={node.y - (hoverNode === index ? 13 : 10)}
+                      fontSize={hoverNode === index ? 11 : 9}
+                      fontWeight={hoverNode === index ? 600 : 400}
+                      textAnchor="middle"
+                      fill={dim ? '#bfbfbf' : hoverNode === index ? '#1f1f1f' : '#595959'}
+                      stroke="#fff"
+                      strokeWidth={hoverNode === index ? 3 : 2}
+                      paintOrder="stroke"
+                    >
+                      {clip(displayName(node.entity))}
+                    </text>
+                    {hoverNode === index && displayName(node.entity) !== node.entity.code ? (
+                      <text
+                        x={node.x}
+                        y={node.y + 16}
+                        fontSize={8}
+                        textAnchor="middle"
+                        fill="#8c8c8c"
+                        stroke="#fff"
+                        strokeWidth={2}
+                        paintOrder="stroke"
+                      >
+                        {node.entity.code}
+                      </text>
+                    ) : null}
+                  </g>
                 ) : null}
               </g>
             );
