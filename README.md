@@ -34,6 +34,7 @@ cd .. && python -m pytest -q                             # 314 项测试（含�
 python scripts/check_frontend_contract.py                 # 前端调用 vs 后端契约一致性
 python scripts/export_openapi.py                          # 导出 openapi.json / openapi.yaml
 make eval-report                                          # 评测报告 → var/eval_report.md（L1 阻断 / L2 观察）
+make cleanup-assistant                                    # 清理断流占位/孤儿会话/评测遗留（先报告，加 --apply 才删）
 ```
 
 前端构建产物存在时，后端会自动挂载 SPA：`/` 与客户端路由返回 index.html，`/assets/*` 返回真实资源，

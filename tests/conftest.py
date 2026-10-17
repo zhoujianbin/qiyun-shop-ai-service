@@ -147,3 +147,13 @@ def staff_token(client: TestClient, username: str = "admin") -> str:
 
 def customer_token(client: TestClient, username: str = "buyer_zhang") -> str:
     return login(client, username, staff=False)
+
+@pytest.fixture(autouse=True)
+def _relax_message_rate_limit(monkeypatch):
+    """测试里同一客户会连发很多条消息，默认 20 条/分钟的限流会误伤用例。
+
+    需要验证限流的用例显式把该值改小，因此这里统一放宽。
+    """
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "assistant_rate_limit_per_minute", 100_000)

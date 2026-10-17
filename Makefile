@@ -18,6 +18,9 @@ test:
 eval:
 	python -m pytest -q -k eval
 
+cleanup-assistant:
+	.venv/bin/python scripts/cleanup_assistant.py --apply
+
 eval-report:
 	python scripts/eval_report.py
 

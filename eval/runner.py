@@ -17,7 +17,7 @@ from app.services import (
     assistant_conversation as conversation_service,
     assistant_graph, assistant_handoff, knowledge_retrieval, tool_registry,
 )
-from sqlalchemy import select
+from sqlalchemy import select, text
 
 
 def _actor(db) -> dict:
@@ -100,8 +100,10 @@ def run_l1(case: dict) -> dict:
             write_tools = {name for name in scripted
                            if name in tool_registry.TOOLS
                            and not tool_registry.TOOLS[name].read_only}
+            created_conversation_id = None
             if write_tools:
                 created = conversation_service.create_conversation(db, actor_info)
+                created_conversation_id = created["id"]
                 placeholder = conversation_service.append_message(
                     db, created["id"], role="ASSISTANT", content="", status="STREAMING")
                 conversation = db.get(Conversation, created["id"])
@@ -132,8 +134,32 @@ def run_l1(case: dict) -> dict:
                     identity_level="customer" if setup.get("identity") == "verified" else "public",
                     history=[], conversation=None, message_id=None) if kind == "text")
                 results["prompt"] = text
+            # 评测必须可重放且不污染业务库：本用例建的会话/占位消息/待确认动作全部清掉
+            # （action.propose 内部会 commit，所以这里用新会话删除而不是回滚）
+            if created_conversation_id is not None:
+                _discard_case_rows(created_conversation_id)
     provider.script(None)
     return results
+
+
+def _discard_case_rows(conversation_id: int) -> None:
+    """清理评测用例在业务库留下的副作用（幂等、失败不抛出）。"""
+    try:
+        with SessionLocal() as db:
+            db.execute(text("delete from assistant.pending_action where conversation_id = :c"),
+                       {"c": conversation_id})
+            db.execute(text("delete from assistant.tool_call where conversation_id = :c"),
+                       {"c": conversation_id})
+            db.execute(text("delete from assistant.citation where message_id in"
+                            " (select id from assistant.message where conversation_id = :c)"),
+                       {"c": conversation_id})
+            db.execute(text("delete from assistant.message where conversation_id = :c"),
+                       {"c": conversation_id})
+            db.execute(text("delete from assistant.conversation where id = :c"),
+                       {"c": conversation_id})
+            db.commit()
+    except Exception:  # noqa: BLE001 - 清理失败不应影响评测结论
+        pass
 
 
 def checks_of(case: dict, result: dict) -> dict[str, bool]:

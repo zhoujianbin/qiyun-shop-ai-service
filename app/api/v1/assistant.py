@@ -263,6 +263,11 @@ def stream_message(conversation_id: int, payload: StreamRequest, request: Reques
                 # 内存缓冲实时内容，供客服工作台轮询看到流式过程（不写库，避免占用额外连接）
                 _LIVE[answer.id] = "".join(collected)
                 yield _sse("delta", {"text": payload})
+        except GeneratorExit:
+            # 客户端断开（关页面/网络中断）：必须落终态，否则会留下永远 STREAMING 的空消息
+            # 与无标题会话（前端显示成"会话 #125"）
+            _finalize_abort(db, answer, collected, started, state)
+            raise
         except Exception as exc:  # noqa: BLE001
             assistant_handoff.create_handoff(
                 db, actor, conversation, reason="MODEL_ERROR", summary=str(exc)[:200])
@@ -301,10 +306,23 @@ def _mask_args(args: dict) -> dict:
     return masked
 
 
+def _finalize_abort(db: Session, message: Message, collected: list[str],
+                    started: float, state: "assistant_graph.State | None") -> None:
+    """客户端断流时的兜底：落 FAILED 终态并清理内存缓冲（供单测直接验证）。"""
+    _LIVE.pop(message.id, None)
+    _finish(db, message, "FAILED", "".join(collected), latency_ms=_elapsed(started),
+            state=state, error_code="CLIENT_ABORTED")
+
+
 def _finish(db: Session, message: Message, status: str, content: str, *, latency_ms: int,
-            state: "assistant_graph.State | None" = None) -> None:
+            state: "assistant_graph.State | None" = None,
+            error_code: str | None = None) -> None:
     from app.models.generated import Citation, RetrievalTrace, ToolCall
 
+    if error_code:
+        meta = dict(message.metadata_json or {})
+        meta["error_code"] = error_code
+        message.metadata_json = meta
     message.status = status
     message.content = content
     message.latency_ms = latency_ms
