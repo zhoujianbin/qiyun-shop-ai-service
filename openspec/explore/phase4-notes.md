@@ -268,3 +268,86 @@
 | Q4 | chunk↔entity 映射方案（A 新表 / B 现算 / C metadata） | **未答** |
 | Q5 | 67 实体 / 105 关系是否"够用" | **未答** |
 | Q6 | 工具清单边界（9 个 / 7 个 / 11 个） | 本轮新提 |
+---
+
+## 10 写路径与失败路径（第 4 轮）
+
+### 10.1 F21 **[必须是安全缺陷]**：`identity_level` 由客户端决定
+
+| 项 | 实测 |
+|---|---|
+| 事实 | `StreamRequest.identity_level: str = "public"`（`app/schemas/assistant.py:79`）由**客户端上传**，`assistant.py:171` 原样透传给 `assistant_graph.run()` → `search(identity_level=...)` |
+| 后果 | 任意登录用户（含游客）传 `identity_level="agent"` 即可解锁 `IDENTITY_LEVELS["agent"] = ["public","customer","agent"]` 的切片，**读到内部客服文档** |
+| 定性 | 三期既存信息泄露；四期要给工具做核验门禁，此洞不堵则门禁无意义（工具参数可比切片更敏感） |
+| 修法 | 保留字段（不动前端/契约），**服务端忽略入参**，改由 `active_verification(conversation_id)` 推导：VERIFIED → `"customer"`，否则 `"public"`；员工走 `ai:chat:read` 才给 `"agent"` |
+
+### 10.2 待确认动作状态机
+
+```
+             propose(写工具被模型选中)
+                    |
+                    v
+   +----------> PROPOSED ----cancel----> CANCELLED
+   |             |    \                     ^
+   |             |     \__expire 10min__    |
+   |         confirm    \                |
+   |             v       v               |
+   |          CONFIRMED  EXPIRED         |
+   |             |                       |
+   |         execute                     |
+   |        /        \                   |
+   |   ok  /          \  fail            |
+   |      v            v                 |
+   |  EXECUTED      FAILED ----retry---->|
+   |      |                              |
+   |      +--- 售后：可撤销(aftersales.cancel，用户自行操作)
+   |      +--- 取消订单：不可撤销，只能转人工
+```
+
+### 10.3 安全模型七件套（对齐 (e)）
+
+| # | 机制 | 本期做法 | 依据 |
+|---|---|---|---|
+| S1 | 二次确认 | 确认卡片只展示**对象+影响+不可撤销标记+过期时间**；对象字段复用 `order_fact_snapshot` 6 字段白名单，不展示手机/地址/卡号 | 三期 D20 |
+| S2 | 幂等 | `UNIQUE(conversation_id, action_key)`，`action_key=sha256(tool + 归一化参数)`；状态迁移用 CAS `UPDATE … WHERE status='PROPOSED'` | 一期幂等先例 |
+| S3 | 审计 | 3 时点 `audit.record`：propose / confirm / execute(ok\|fail)；outbox `ai.action.proposed / confirmed / executed / failed` | `audit.py` |
+| S4 | 可撤销性 | `cancel_order`：执行后**不可撤销**（订单已取消，无反向操作）；`create_after_sales`：`COMPLETED` 前客户可自行 `aftersales.cancel` 撤销，AI 只给入口不代操作 | `aftersales.py:271` 有 cancel |
+| S5 | 金额上限 | 本期 2 个写工具均**零金额变动**，不设阈值；改设频次闸：单会话 ≤3 次写、同一 order 24h 内 ≤1 次取消 | 范围 X3 |
+| S6 | 权限与渠道隔离 | `tool:write:*` 能力门 + actor 继承会话渠道（`actor.channel_ids` 由服务层生效） | `order.py:71` |
+| S7 | 只动自己的单 | **actor 只来自 `conversation.user_id`**；`resolve_order` 带 `customer_id` 过滤；execute 前二次校验 `order.customer_id` | 双保险 |
+
+**新增硬约束（来自 G3）**：**单轮最多 1 个写工具调用**。因为一期服务各自 `db.commit()`，多写无法回滚；复合写（取消+提交售后）必须拆成两轮确认。
+
+### 10.4 核验与工具门禁（对齐 (f)）
+
+| # | 规则 |
+|---|---|
+| V1 | `requires_identity=True` 的工具在**进入工具节点前**检查 `active_verification(conversation_id)`；无则直接返回 `IDENTITY_REQUEST`，工具不执行 |
+| V2 | 核验单里已存 `order_no` → 必须**精确匹配**工具入参 `order_no`；核验 A 单后查 B 单视为未核验（不是"已核验但无权限"，避免信息泄漏） |
+| V3 | 有效期：读工具沿用 30 分钟；**写工具在 confirm 时再校验一次 `expires_at`**（防止挂起后写） |
+| V4 | `active_verification()` 现在**全库无调用点**，四期必须接上；它同时是 F21 的唯一正确取值来源 |
+| V5 | 失败 3 次锁 + 转人工 `IDENTITY_FAILED` 沿用，不改 |
+
+### 10.5 失败与降级矩阵（对齐 (g)）
+
+| 情形 | 回话 | 自动重试 | 转人工 |
+|---|---|---|---|
+| 超时（只读 3s / 写 8s） | "查询超时，请稍后再试或转人工" | 否 | 可选 |
+| 5xx | "系统繁忙，已记录" + `request_id` | 只读重试 1 次 | 是 |
+| 业务拒绝（如 `ORDER_STATE_INVALID` 已发货） | **原样透传 code + 人话解释 + 出路**（"已发货，请走退货退款流程"） | 否 | 否 |
+| 404 / 越权 | 统一"没有找到该订单" | 否 | 否（防探测） |
+| 参数不合法 | 反问补全，不重试 | 否 | 否 |
+| 写操作执行失败 | "未能完成，未做任何改动" + `request_id` | **否**（绝不自动重试写） | 可选 |
+
+**铁律（防编造）**：工具结果为**服务端事实块**，前端直接渲染成卡片；模型只写叙述句，**不得复述金额/单号/时间等具体值**。沿用三期"引用只由服务端生成"的同一条思路。
+
+---
+
+## 11 累计待决
+
+| # | 问题 | 状态 |
+|---|---|---|
+| Q4 | chunk↔entity 映射方案 | **暂定 A**（新表 + 逻辑键），未明确反对 |
+| Q5 | 67 实体 / 105 关系够不够 | **暂定够用** |
+| Q6 | 工具清单 9 个 | **已定 A** |
+| Q7 | F21 `identity_level` 处置 | 本轮新提，需拍 |
