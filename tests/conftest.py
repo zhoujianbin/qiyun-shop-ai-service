@@ -76,6 +76,26 @@ def _test_dsn() -> str:
     return re.sub(r"\+psycopg", "", TEST_URL)
 
 
+def _seed_ontology(db) -> None:
+    """四期：测试库也要有本体数据，否则归一/图遍历类断言永远为空。"""
+    from sqlalchemy import text
+
+    from app.services import ontology, ontology_extract, ontology_review
+
+    actor = {"id": None, "party": "SYSTEM", "label": "conftest"}
+    ontology.import_structured_rules(db, actor)
+    ontology_extract.extract_candidates(db, actor)
+    ontology_review.apply_review(db, actor)
+    draft_ids = [row[0] for row in db.execute(
+        text("select id from ontology.entity where status = 'DRAFT'")).fetchall()]
+    if draft_ids:
+        ontology.review(db, actor, entity_ids=draft_ids, action="approve")
+    fault_ids = [row[0] for row in db.execute(
+        text("select id from ontology.entity where kind = 'fault'")).fetchall()]
+    if fault_ids:
+        ontology.review(db, actor, entity_ids=fault_ids, action="approve")
+
+
 @pytest.fixture(scope="session", autouse=True)
 def prepared_database():
     with _connect_admin() as conn:
@@ -91,6 +111,7 @@ def prepared_database():
         bootstrap.bootstrap_reference(db)
         bootstrap.bootstrap_catalog(db)
         bootstrap.bootstrap_customers(db)
+        _seed_ontology(db)
     engine.dispose()
     yield
 

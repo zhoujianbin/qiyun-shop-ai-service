@@ -1,0 +1,24 @@
+# 知识类用例（L1：链路）。hit 由 fake 检索返回，断言"有引用 + 实体归一"。
+cases:
+  - {id: EV-K-001, category: knowledge, layer: L1, question: "门锁没电了怎么办", must_cite: true, source: SCN-002}
+  - {id: EV-K-002, category: knowledge, layer: L1, question: "指纹识别差怎么办", expected_entities: [SYM-QL-L3P-02], must_cite: true, source: SCN-002}
+  - {id: EV-K-003, category: knowledge, layer: L1, question: "七天无理由退货有什么条件", must_cite: true, source: SCN-014}
+  - {id: EV-K-004, category: knowledge, layer: L1, question: "已支付订单怎么申请取消", must_cite: true, source: SCN-012}
+  - {id: EV-K-005, category: knowledge, layer: L1, question: "订单部分发货是什么意思", must_cite: true, source: SCN-013}
+  - {id: EV-K-006, category: knowledge, layer: L1, question: "发票能开公司抬头吗", must_cite: true, source: 02_订单支付与发票}
+  - {id: EV-K-007, category: knowledge, layer: L1, question: "摄像头无法配网怎么排查", expected_entities: [SYM-QC-C2G-01], must_cite: true, source: SCN-005}
+  - {id: EV-K-008, category: knowledge, layer: L1, question: "扫地机建图失败怎么办", expected_entities: [SYM-QR-R5M-01], must_cite: true, source: SCN-008}
+  - {id: EV-K-009, category: knowledge, layer: L1, question: "吸顶灯频闪是保修范围内吗", must_cite: true, source: SCN-010}
+  - {id: EV-K-010, category: knowledge, layer: L1, question: "网关离线后自动化还能用吗", must_cite: true, source: SCN-011}
+  - {id: EV-K-011, category: knowledge, layer: L1, question: "云录像保留期过了还能找回吗", must_cite: true, source: SCN-007}
+  - {id: EV-K-012, category: knowledge, layer: L1, question: "维修检测后报价需要我确认吗", must_cite: true, source: SCN-015}
+  - {id: EV-K-013, category: knowledge, layer: L1, question: "保修期内耗材坏了免费吗", must_cite: true, source: KB-WARRANTY}
+  - {id: EV-K-014, category: knowledge, layer: L1, question: "门锁支持远程开锁吗", must_cite: true, source: 01_产品知识}
+  - {id: EV-K-015, category: knowledge, layer: L1, question: "配件可以单独购买吗", must_cite: true, source: 01_产品知识}
+  - {id: EV-K-016, category: knowledge, layer: L1, question: "物流停滞多久会介入处理", must_cite: true, source: 03_物流与履约}
+  - {id: EV-K-017, category: knowledge, layer: L1, question: "退款审核通过后多久到账", must_cite: true, source: 05_退换货与退款}
+  - {id: EV-K-018, category: knowledge, layer: L1, question: "安装需要提前多久改约", must_cite: true, source: 04_安装与交付}
+  - {id: EV-K-019, category: knowledge, layer: L1, question: "设备被陌生人绑定怎么办", must_cite: true, source: SCN-004}
+  - {id: EV-K-020, category: knowledge, layer: L1, question: "会员订阅重复扣款怎么处理", must_cite: true, source: SCN-016}
+  - {id: EV-K-021, category: knowledge, layer: L1, question: "门锁安装需要满足什么门厚条件", must_cite: true, source: 01_产品知识}
+  - {id: EV-K-022, category: knowledge, layer: L1, question: "扫地机主刷多久需要更换", must_cite: true, source: 01_产品知识}

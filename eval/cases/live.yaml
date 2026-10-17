@@ -1,0 +1,8 @@
+# 真实模型观察层（L2）：只记录，不进阻断门禁。
+cases:
+  - {id: EV-L-001, category: knowledge, layer: L2, question: "门锁没电了怎么办", source: SCN-002}
+  - {id: EV-L-002, category: knowledge, layer: L2, question: "七天无理由退货有什么条件", source: SCN-014}
+  - {id: EV-L-003, category: knowledge, layer: L2, question: "摄像头无法配网怎么排查", source: SCN-005}
+  - {id: EV-L-004, category: knowledge, layer: L2, question: "保修期内耗材坏了免费吗", source: KB-WARRANTY}
+  - {id: EV-L-005, category: knowledge, layer: L2, question: "退款审核通过后多久到账", source: 05_退换货与退款}
+  - {id: EV-L-006, category: knowledge, layer: L2, question: "门锁支持远程开锁吗", source: 01_产品知识}

@@ -1,0 +1,18 @@
+# 只读工具用例（L1）。前置：已核验（identity: verified）+ 指定订单号。
+cases:
+  - {id: EV-R-001, category: tool_read, layer: L1, question: "我的订单 SO20260101001234 到哪了", setup: {identity: verified, order_no: SO20260101001234}, must_call_tool: [query_shipment]}
+  - {id: EV-R-002, category: tool_read, layer: L1, question: "查一下订单 SO20260101001234 的状态", setup: {identity: verified, order_no: SO20260101001234}, must_call_tool: [query_order]}
+  - {id: EV-R-003, category: tool_read, layer: L1, question: "订单 SO20260101001234 付款成功了吗", setup: {identity: verified, order_no: SO20260101001234}, must_call_tool: [query_payment]}
+  - {id: EV-R-004, category: tool_read, layer: L1, question: "我的退款进度怎么样，订单 SO20260101001234", setup: {identity: verified, order_no: SO20260101001234}, must_call_tool: [query_after_sales]}
+  - {id: EV-R-005, category: tool_read, layer: L1, question: "订单 SO20260101001234 的发票开了没有", setup: {identity: verified, order_no: SO20260101001234}, must_call_tool: [query_invoice]}
+  - {id: EV-R-006, category: tool_read, layer: L1, question: "有哪些在售的门锁型号", must_call_tool: [query_product]}
+  - {id: EV-R-007, category: tool_read, layer: L1, question: "QL-L3P 现在什么价格", must_call_tool: [query_product]}
+  - {id: EV-R-008, category: tool_read, layer: L1, question: "扫地机器人有货吗", must_call_tool: [query_product]}
+  - {id: EV-R-009, category: tool_read, layer: L1, question: "我的订单 SO20260101001234 快递单号多少", setup: {identity: verified, order_no: SO20260101001234}, must_call_tool: [query_shipment]}
+  - {id: EV-R-010, category: tool_read, layer: L1, question: "订单 SO20260101001234 到底付了多少钱", setup: {identity: verified, order_no: SO20260101001234}, must_call_tool: [query_payment]}
+  - {id: EV-R-011, category: tool_read, layer: L1, question: "我要退货，先帮我看下订单 SO20260101001234 有没有售后申请", setup: {identity: verified, order_no: SO20260101001234}, must_call_tool: [query_after_sales]}
+  - {id: EV-R-012, category: tool_read, layer: L1, question: "七天无理由退货有什么条件", must_not_call_tool: [query_order, query_shipment, query_payment, query_after_sales, query_invoice], must_cite: true}
+  - {id: EV-R-013, category: tool_read, layer: L1, question: "退货政策是怎么规定的", must_not_call_tool: [query_after_sales, query_order]}
+  - {id: EV-R-014, category: tool_read, layer: L1, question: "帮我查订单", must_not_call_tool: [query_order]}
+  # 这条是"模型不该选写工具"，属真实模型观察层
+  - {id: EV-R-015, category: tool_read, layer: L2, question: "订单 SO20260101001234 到哪了", setup: {identity: verified, order_no: SO20260101001234}, must_not_call_tool: [cancel_order, create_after_sales]}

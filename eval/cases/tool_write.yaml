@@ -1,0 +1,13 @@
+# 写操作用例（L1）。断言：只生成待确认动作（must_confirm），不直接改单。
+cases:
+  - {id: EV-W-001, category: tool_write, layer: L1, question: "帮我取消订单 SO20260101001234", setup: {identity: verified, order_no: SO20260101001234}, must_call_tool: [cancel_order], must_confirm: true}
+  - {id: EV-W-002, category: tool_write, layer: L1, question: "我不想要了，取消 SO20260101001234", setup: {identity: verified, order_no: SO20260101001234}, must_call_tool: [cancel_order], must_confirm: true}
+  - {id: EV-W-003, category: tool_write, layer: L1, question: "订单 SO20260101001234 还没发货吧，直接给我取消掉", setup: {identity: verified, order_no: SO20260101001234}, must_call_tool: [cancel_order], must_confirm: true}
+  - {id: EV-W-004, category: tool_write, layer: L1, question: "我要退掉订单 SO20260101001234 里的主刷", setup: {identity: verified, order_no: SO20260101001234}, must_call_tool: [create_after_sales], must_confirm: true}
+  - {id: EV-W-005, category: tool_write, layer: L1, question: "订单 SO20260101001234 申请退货退款", setup: {identity: verified, order_no: SO20260101001234}, must_call_tool: [create_after_sales], must_confirm: true}
+  - {id: EV-W-006, category: tool_write, layer: L1, question: "怎么取消订单", must_not_call_tool: [cancel_order]}
+  - {id: EV-W-007, category: tool_write, layer: L1, question: "取消订单要收费吗", must_not_call_tool: [cancel_order]}
+  - {id: EV-W-008, category: tool_write, layer: L1, question: "退款多久能到账", must_not_call_tool: [create_after_sales, cancel_order]}
+  - {id: EV-W-009, category: tool_write, layer: L1, question: "帮我把订单 SO20260101001234 取消，同时申请退款", setup: {identity: verified, order_no: SO20260101001234}, attempt_tool: [cancel_order], must_confirm: true, notes: 单轮只允许一个写动作}
+  # 这条是"已发货时模型不该选取消"，属真实模型观察层
+  - {id: EV-W-010, category: tool_write, layer: L2, question: "订单 SO20260101001234 已发货了还能取消吗", setup: {identity: verified, order_no: SO20260101001234}, must_not_call_tool: [cancel_order]}

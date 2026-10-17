@@ -140,10 +140,20 @@ class State:
         return time.monotonic() - self.started
 
 
+ORDER_NO_RE = re.compile(r"\bSO\d{6,}\b")
+PRODUCT_WORDS = ("型号", "价格", "多少钱", "有货", "在售", "参数", "规格")
+MODEL_CODE_RE = re.compile(r"\bQ[LCHR]-[A-Z0-9]{2,}\b")
+
+
 def classify_rule(question: str) -> str | None:
     text = question or ""
     if any(word in text for word in HUMAN_WORDS):
         return "HUMAN_REQUEST"
+    # 四期：带订单号或型号的问题确定性进工具分支（不额外调模型）
+    if ORDER_NO_RE.search(text) or MODEL_CODE_RE.search(text):
+        return "REALTIME_FACT"
+    if any(word in text for word in PRODUCT_WORDS):
+        return "REALTIME_FACT"
     if any(word in text for word in REALTIME_WORDS):
         return "REALTIME_FACT"
     if any(word in text for word in IDENTITY_WORDS):

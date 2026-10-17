@@ -68,12 +68,12 @@
 
 ## 9 评测闭环
 
-- [ ] 9.1 `eval/cases/*.yaml` 60 条（knowledge 20 / tool_read 15 / tool_write 10 / identity 5 / refuse+safety 10），从 20 篇 SCN + 9 篇 SOP 转化，含 SCN-017/018 红队；验证：`H1`、`H2`
-- [ ] 9.2 `tests/test_eval_contract.py`：字段齐、id 唯一、`category` 合法、`layer` 合法；验证：`H1`
-- [ ] 9.3 `tests/test_eval_l1.py`：fake 脚本化执行链路断言；验证：`H3`
-- [ ] 9.4 `tests/test_eval_l2.py` + `pytest.ini` 加 `eval_live` marker 与 `addopts`；验证：`A7`
-- [ ] 9.5 `make eval` / `make eval-report` → `var/eval_report.{json,md}`，L1/L2 分表无总分；验证：`H4`、`H6`
-- [ ] 9.6 门禁自检：人为改坏一条用例必须让 `make test` 失败；验证：`H5`
+- [x] 9.1 `eval/cases/*.yaml` 60 条（knowledge 20 / tool_read 15 / tool_write 10 / identity 5 / refuse+safety 10），从 20 篇 SCN + 9 篇 SOP 转化，含 SCN-017/018 红队；验证：`H1`、`H2`
+- [x] 9.2 `tests/test_eval_contract.py`：字段齐、id 唯一、`category` 合法、`layer` 合法；验证：`H1`
+- [x] 9.3 `tests/test_eval_l1.py`：fake 脚本化执行链路断言；验证：`H3`
+- [x] 9.4 `tests/test_eval_l2.py` + `pytest.ini` 加 `eval_live` marker 与 `addopts`；验证：`A7`
+- [x] 9.5 `make eval` / `make eval-report` → `var/eval_report.{json,md}`，L1/L2 分表无总分；验证：`H4`、`H6`
+- [x] 9.6 门禁自检：人为改坏一条用例必须让 `make test` 失败；验证：`H5`
 
 ## 10 收口
 

@@ -1,4 +1,4 @@
-.PHONY: install db seed run test contract openapi web-install web-build clean
+.PHONY: install db seed run test contract openapi web-install web-build eval eval-report clean
 
 install:
 	python -m pip install -r requirements.txt
@@ -14,6 +14,12 @@ run:
 
 test:
 	python -m pytest -q
+
+eval:
+	python -m pytest -q -k eval
+
+eval-report:
+	python scripts/eval_report.py
 
 contract:
 	python scripts/check_frontend_contract.py
