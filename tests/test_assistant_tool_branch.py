@@ -125,3 +125,28 @@ def test_stream_emits_tool_event_before_delta_and_hides_tool_calls(client, monke
     # 工具的事实最终进入消息
     assert "正在查询" not in raw  # 我们不发这个占位文本，只发事件
     llm.get_provider().script(None)
+
+def test_knowledge_tool_results_reach_facts_and_citations(monkeypatch, scripted):
+    """工具分支里查知识：命中必须进事实块，并生成服务端引用（曾因 facts=None 丢失）。"""
+    from app.services import knowledge_retrieval
+
+    fake_hits = [{"chunk_id": 1, "document_id": "KB-RETURN-001", "version": 1,
+                  "title_path": "七天无理由退货", "line_start": 1, "line_end": 2,
+                  "snippet": "七天无理由退货需要订单有效且在签收后 7 天内提出",
+                  "chunk_ord": 1}]
+    monkeypatch.setattr(knowledge_retrieval, "search",
+                        lambda db, query, **kw: {"hits": fake_hits,
+                                                 "debug": {"latency_ms": 1, "vector_score": {},
+                                                           "text_score": {}, "fused_score": {},
+                                                           "candidates": 1}})
+    scripted([{"name": "search_knowledge", "arguments": {"query": "退货政策"}}])
+    with SessionLocal() as db:
+        state = assistant_graph.State(question="能退货么", conversation_id=None)
+        assistant_graph.plan(state)
+        state = assistant_graph.tool_loop(db, state,
+                                          actor={"id": 1, "party": "CUSTOMER", "customer_id": 1},
+                                          identity_level="public", history=[])
+        state = assistant_graph.finalize(db, state, history=[])
+    assert state.facts and state.facts[0]["facts"]["hits"][0]["document_id"] == "KB-RETURN-001"
+    assert state.citations and state.citations[0]["document_id"] == "KB-RETURN-001"
+    assert "七天无理由退货" in state.prompt_messages[0]["content"]

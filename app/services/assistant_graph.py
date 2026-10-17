@@ -312,6 +312,8 @@ TOOL_SYSTEM_PROMPT = (
     "不要重复索要订单号或手机号后四位。"
     "用户提到自己的订单但没给订单号时，先调 query_my_orders 列出并按商品名过滤，"
     "不要直接索要订单号。"
+    "回答涉及退货、保修、时效、费用等政策时，必须同时调 search_knowledge 取依据，"
+    "不要凭印象回答政策。"
 )
 
 
@@ -483,12 +485,19 @@ def stream_tool_answer(db: Session, state: State, *, actor: dict | None, identit
             latency = int((time.monotonic() - started) * 1000)
             state.tool_calls.append({"tool_name": spec.name, "args": args, "status": "OK",
                                      "error_code": None, "latency_ms": latency})
+            payload = result.get("facts")
+            if payload is None and result.get("hits") is not None:
+                # 知识检索没有 facts 结构：把命中压成可直接引用的事实块，并并入 citations 来源
+                payload = {"hits": [{"document_id": hit.get("document_id"),
+                                     "title_path": hit.get("title_path"),
+                                     "snippet": (hit.get("snippet") or "")[:240]}
+                                    for hit in (result.get("hits") or [])[:5]]}
+                state.hits = _merge_hits(state.hits, result.get("hits") or [])
             state.facts.append({"tool": spec.name, "ok": True,
-                                "facts": result.get("facts"), "note": result.get("note")})
+                                "facts": payload, "note": result.get("note")})
             yield ("tool", {"name": spec.name, "status": "ok", "latency_ms": latency})
             pending_messages.append({"role": "tool", "tool_call_id": call_id,
-                                     "content": json.dumps(result.get("facts"),
-                                                           ensure_ascii=False)})
+                                     "content": json.dumps(payload, ensure_ascii=False)})
         # 缓冲的叙述在工具事件之后下发
         if text:
             yield ("text", text)
@@ -732,6 +741,9 @@ def finalize(db: Session, state: State, *, history: list[dict]) -> State:
         note = ""
         if failed:
             note = "；部分查询未成功，已按已拿到的结果回答"
+        # 工具分支里如果查过知识，也要给引用（沿用"引用只由服务端生成"的硬约束）
+        if state.hits:
+            state.citations = build_citations(db, state.hits)
         state.prompt_messages = [
             {"role": "system", "content": (
                 "你是栖云智家客服助手。只依据下方事实与知识作答，不编造；"
