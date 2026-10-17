@@ -17,6 +17,8 @@ ALLOWED = {
     ".csv": "text/csv",
     ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ".md": "text/markdown",
+    ".yaml": "application/yaml",
 }
 MAGIC = {
     b"\x89PNG\r\n\x1a\n": "image/png",

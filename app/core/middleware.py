@@ -16,6 +16,14 @@ logger = logging.getLogger("app.request")
 
 WRITE_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
 EXEMPT_PREFIXES = ("/api/v1/auth", "/api/v1/attachments", "/api/v1/webhooks", "/docs", "/openapi.json", "/api/v1/system")
+# 二期追加：
+# - 切片预览是只读 POST（无副作用），写幂等记录会让每次预览都落一行；
+# - 批量导入的 body 是 multipart，边界每次随机，按原始 body 算指纹必然冲突，
+#   幂等改由 knowledge.import_job.idempotency_key 在服务层保证（同键返回同一任务）。
+EXEMPT_PREFIXES = (*EXEMPT_PREFIXES, "/api/v1/knowledge/preview-chunks",
+                    "/api/v1/knowledge/import/jobs", "/api/v1/knowledge/rules/import",
+                    # 检索测试只写检索日志，不需要幂等回放（否则日志不会随调用增长）
+                    "/api/v1/knowledge/retrieval")
 
 
 class RequestContextMiddleware(BaseHTTPMiddleware):

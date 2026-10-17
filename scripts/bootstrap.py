@@ -32,6 +32,18 @@ PERMISSIONS = [
     ("shared:staff:read", "查看员工", "shared"), ("shared:staff:write", "维护员工", "shared"),
     ("shared:channel:read", "查看渠道", "shared"), ("shared:channel:write", "维护渠道", "shared"),
     ("shared:audit:read", "查看审计", "shared"),
+    ("knowledge:document:read", "查看知识文档与版本", "knowledge"),
+    ("knowledge:document:write", "新建与编辑知识文档", "knowledge"),
+    ("knowledge:document:import", "批量导入知识文档", "knowledge"),
+    ("knowledge:document:archive", "归档知识文档", "knowledge"),
+    ("knowledge:document:publish", "发布知识文档", "knowledge"),
+    ("knowledge:document:rollback", "回滚知识文档", "knowledge"),
+    ("knowledge:rule:read", "查看结构化规则", "knowledge"),
+    ("knowledge:rule:write", "维护结构化规则", "knowledge"),
+    ("knowledge:review:read", "查看审核队列", "knowledge"),
+    ("knowledge:review:write", "审核决定与批注", "knowledge"),
+    ("knowledge:retrieval:test", "执行检索测试", "knowledge"),
+    ("knowledge:governance:read", "查看治理报告", "knowledge"),
 ]
 
 ROLES = [
@@ -48,10 +60,22 @@ ROLES = [
       "shop:invoice:read", "shop:invoice:write", "shop:customer:read", "shop:fulfillment:read", "shop:report:read"]),
     ("FINANCE_VIEWER", "财务只读", "支付、退款、发票、报表只读",
      ["shop:order:read", "shop:payment:read", "shop:refund:read", "shop:invoice:read", "shop:report:read"]),
-    ("CS_SUPERVISOR", "客服主管", "订单与售后只读、售后审核",
+    ("CS_SUPERVISOR", "客服主管", "订单与售后只读、售后审核、知识只读与检索测试",
      ["shop:order:read", "shop:aftersales:read", "shop:aftersales:review", "shop:customer:read", "shop:report:read",
-      "shop:fulfillment:read"]),
-    ("AUDITOR", "只读审计", "全部模块只读", "READ_ONLY"),
+      "shop:fulfillment:read", "knowledge:document:read", "knowledge:retrieval:test", "knowledge:governance:read"]),
+    ("AUDITOR", "只读审计", "全部模块只读（不含知识库正文）", "READ_ONLY"),
+    ("KNOWLEDGE_ADMIN", "知识管理员", "全部 knowledge:* 权限",
+     ["knowledge:document:read", "knowledge:document:write", "knowledge:document:import",
+      "knowledge:document:archive", "knowledge:document:publish", "knowledge:document:rollback",
+      "knowledge:rule:read", "knowledge:rule:write", "knowledge:review:read", "knowledge:review:write",
+      "knowledge:retrieval:test", "knowledge:governance:read"]),
+    ("KNOWLEDGE_REVIEWER", "知识审核员", "读、审核、批注、发布",
+     ["knowledge:document:read", "knowledge:document:publish", "knowledge:review:read",
+      "knowledge:review:write", "knowledge:rule:read", "knowledge:governance:read"]),
+    ("KNOWLEDGE_EDITOR", "内容运营", "读、编辑、提交审核、导入",
+     ["knowledge:document:read", "knowledge:document:write", "knowledge:document:import"]),
+    ("CS_AGENT", "普通客服", "只读知识文档，供三期问答使用",
+     ["knowledge:document:read"]),
 ]
 
 CHANNELS = [
@@ -223,7 +247,8 @@ def bootstrap_reference(db: Session) -> dict:
         if mapping == "ALL":
             selected = list(perms.values())
         elif mapping == "READ_ONLY":
-            selected = [p for p in perms.values() if p.code.endswith(":read")]
+            # 审计员只读全部业务模块，但不得读取知识库正文（含高风险话术与定价口径）
+            selected = [p for p in perms.values() if p.code.endswith(":read") and not p.code.startswith("knowledge:")]
         else:
             selected = [perms[c] for c in mapping]
         for p in selected:

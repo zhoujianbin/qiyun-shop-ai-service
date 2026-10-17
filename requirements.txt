@@ -11,3 +11,13 @@ httpx>=0.27
 pytest>=8.2
 pytest-cov>=5.0
 ruff>=0.4
+
+# 二期：知识库（向量化与文档解析）
+# 说明：torch 默认装 CPU 版即可；Linux CI 若需精简镜像可改用
+#   pip install torch --index-url https://download.pytorch.org/whl/cpu
+pgvector>=0.2
+PyYAML>=6.0
+numpy>=1.26
+python-docx>=1.1
+sentence-transformers>=3.0
+torch>=2.2

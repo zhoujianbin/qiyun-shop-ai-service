@@ -22,6 +22,17 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     max_upload_mb: int = 20
 
+    # 二期：知识库向量化
+    embedding_provider: str = "auto"          # auto | bge | fake；auto 在 APP_ENV=test 时用 fake
+    embedding_model_name: str = "BAAI/bge-small-zh-v1.5"
+    embedding_model_path: str | None = None   # 指定离线模型目录时不再联网下载
+    embedding_dim: int = 512
+    embedding_query_prefix: str = "为这个句子生成表示以用于检索相关文章："
+    hf_home: str = "./var/models"
+
+    # 二期：知识库审核
+    knowledge_allow_self_review: bool = True   # 单人开发默认开；企业上线可视规模关闭
+
     @property
     def cors_origin_list(self) -> list[str]:
         return [x.strip() for x in self.cors_origins.split(",") if x.strip()]
