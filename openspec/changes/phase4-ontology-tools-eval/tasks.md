@@ -32,7 +32,7 @@
 - [x] 4.3 `stream()` 改为产出结构化事件：累积 `delta.tool_calls`（`id`/`name` 取首块、`arguments` 逐片拼接、`finish_reason` 收口），丢弃 `reasoning_content`；验证：`G2`（tool_calls 不出流）
 - [x] 4.4 `FakeProvider` 增脚本化模式：按用例 `must_call_tool` 产出对应 `tool_calls`；验证：`H7`
 - [x] 4.5 决策轮 `max_tokens` 单配 ≥600；`finish_reason=length` 判失败；验证：`G4`
-- [ ] 4.6 改造 `assistant.py` 的流式分发（`yield from` → for 循环分发）；验证：老三期 6 事件载荷字段集合不变（`G1`）
+- [x] 4.6 改造 `assistant.py` 的流式分发（`yield from` → for 循环分发）；验证：老三期 6 事件载荷字段集合不变（`G1`）
 
 ## 5 工具注册表与只读工具
 
