@@ -29,6 +29,8 @@ export const knowledgeApi = {
   previewChunks: (content_md: string) =>
     api.post<ChunkPreviewItem[]>('/knowledge/preview-chunks', { content_md }),
 
+  createVersion: (documentPk: number | string, body: { content_md: string; change_summary?: string }) =>
+    api.post<KnowledgeVersion>(`/knowledge/documents/${documentPk}/versions`, body),
   submit: (versionId: number | string) => api.post<KnowledgeVersion>(`/knowledge/versions/${versionId}/submit`),
   publish: (versionId: number | string, body: { change_summary: string; effective_from?: string }) =>
     api.post<PublishResult>(`/knowledge/versions/${versionId}/publish`, body),

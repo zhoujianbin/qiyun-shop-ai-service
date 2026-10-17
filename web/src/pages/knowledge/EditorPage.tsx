@@ -1,18 +1,26 @@
 import Alert from 'antd/es/alert';
+import App from 'antd/es/app';
+import Button from 'antd/es/button';
 import Card from 'antd/es/card';
 import Col from 'antd/es/col';
 import Input from 'antd/es/input';
 import List from 'antd/es/list';
 import Row from 'antd/es/row';
+import Select from 'antd/es/select';
 import Space from 'antd/es/space';
 import Tag from 'antd/es/tag';
 import Typography from 'antd/es/typography';
-import { useEffect, useRef, useState } from 'react';
-import { useMutation } from '@tanstack/react-query';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import ReactMarkdown from 'react-markdown';
+import { errorMessage } from '@/api/errors';
 import { knowledgeApi } from '@/api/endpoints/knowledge';
+import { queryKeys } from '@/api/queryKeys';
+import { queryClient } from '@/app/providers';
 import { PageHeader } from '@/components/common/PageHeader';
+import { usePermission } from '@/hooks/usePermission';
 import { ROUTES } from '@/constants/routes';
+import { P } from '@/types/permissions';
 import type { ChunkPreviewItem } from '@/types/knowledge';
 
 const SAMPLE = `# 产品知识
@@ -26,15 +34,51 @@ const SAMPLE = `# 产品知识
 电量低于 20% 时 App 推送提醒，仍可使用约 2 周。
 `;
 
-/** 编辑器：Markdown 编辑 + 只读渲染 + 服务端切片预览（500ms 防抖）。 */
+/** 编辑器：选择文档 → 载入当前版本 → 编辑 → 保存为新版本；切片在服务端生成（500ms 防抖预览）。 */
 export default function EditorPage() {
+  const { message } = App.useApp();
   const [content, setContent] = useState(SAMPLE);
   const [chunks, setChunks] = useState<ChunkPreviewItem[]>([]);
+  const [documentPk, setDocumentPk] = useState<number | undefined>();
+  const [changeSummary, setChangeSummary] = useState('');
   const timer = useRef<number | null>(null);
+  const canWrite = usePermission(P.knowledgeDocumentWrite);
+
+  const documents = useQuery({
+    queryKey: queryKeys.knowledge.documents({ page: 1, page_size: 50 }),
+    queryFn: () => knowledgeApi.documents({ page: 1, page_size: 50 }),
+  });
+
+  const detail = useQuery({
+    queryKey: queryKeys.knowledge.document(documentPk ?? 0),
+    queryFn: () => knowledgeApi.document(documentPk as number),
+    enabled: Boolean(documentPk),
+  });
+
+  // 选中文档后载入当前版本内容
+  useEffect(() => {
+    const active = detail.data?.active_version;
+    const latest = detail.data?.versions?.[0];
+    const source = active ?? latest;
+    if (source?.content_md) setContent(source.content_md);
+  }, [detail.data]);
 
   const preview = useMutation({
     mutationFn: (value: string) => knowledgeApi.previewChunks(value),
     onSuccess: (data) => setChunks(data),
+  });
+
+  const save = useMutation({
+    mutationFn: () => knowledgeApi.createVersion(documentPk as number, {
+      content_md: content,
+      change_summary: changeSummary || undefined,
+    }),
+    onSuccess: async (version) => {
+      message.success(`已保存为 v${version.version}（草稿），提交审核后才可发布`);
+      setChangeSummary('');
+      await queryClient.invalidateQueries({ queryKey: ['knowledge'] });
+    },
+    onError: (error) => message.error(errorMessage(error)),
   });
 
   useEffect(() => {
@@ -50,27 +94,81 @@ export default function EditorPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [content]);
 
+  const options = useMemo(
+    () => (documents.data?.items ?? []).map((item) => ({
+      value: item.id,
+      label: `${item.title}（${item.document_id}）`,
+    })),
+    [documents.data],
+  );
+
+  const loadedVersion = detail.data?.active_version ?? detail.data?.versions?.[0];
+
   return (
     <div className="qy-page">
       <PageHeader
         title="文档编辑"
-        subtitle="Markdown 编写与切片预览；切片在服务端生成，前端不自行切分"
+        subtitle="选择文档 → 载入当前版本 → 编辑 → 保存为新版本；切片在服务端生成"
         breadcrumb={[{ label: '运营后台', to: ROUTES.adminDashboard }, { label: '文档编辑' }]}
+        extra={
+          canWrite ? (
+            <Space>
+              <Input
+                placeholder="变更摘要（可选）"
+                value={changeSummary}
+                onChange={(event) => setChangeSummary(event.target.value)}
+                style={{ width: 220 }}
+                maxLength={200}
+              />
+              <Button
+                type="primary"
+                disabled={!documentPk || !content.trim()}
+                loading={save.isPending}
+                onClick={() => save.mutate()}
+              >
+                保存为新版本
+              </Button>
+            </Space>
+          ) : null
+        }
       />
 
-      <Alert
-        type="info"
-        showIcon
-        style={{ marginBottom: 16 }}
-        message="本页是切片预览工作台"
-        description="正式保存与提交审核走导入接口（一次请求多文件）；此处用于确认切分效果与长度是否落在 200–600 字符区间。"
-      />
+      <Card size="small" style={{ marginBottom: 16 }}>
+        <Space wrap>
+          <span>目标文档：</span>
+          <Select
+            showSearch
+            allowClear
+            style={{ minWidth: 360 }}
+            placeholder="搜索并选择要编辑的文档"
+            value={documentPk}
+            loading={documents.isLoading}
+            options={options}
+            filterOption={(input, option) => String(option?.label ?? '').includes(input)}
+            onChange={(value) => setDocumentPk(value)}
+          />
+          {loadedVersion ? (
+            <Typography.Text type="secondary">
+              当前版本 v{loadedVersion.version} · {loadedVersion.status}
+            </Typography.Text>
+          ) : null}
+        </Space>
+        {!documentPk ? (
+          <Alert
+            style={{ marginTop: 12 }}
+            type="info"
+            showIcon
+            message="先选择一份文档"
+            description="选中后会自动载入其当前生效版本的内容；保存会新建一个草稿版本，不会改动已有版本。"
+          />
+        ) : null}
+      </Card>
 
       <Row gutter={16}>
         <Col xs={24} lg={12}>
           <Card title="Markdown 源文" size="small">
             <Input.TextArea
-              rows={22}
+              rows={20}
               value={content}
               onChange={(event) => setContent(event.target.value)}
               placeholder="在此粘贴或编写 Markdown"
@@ -80,15 +178,11 @@ export default function EditorPage() {
         </Col>
         <Col xs={24} lg={12}>
           <Card title="渲染预览" size="small" style={{ marginBottom: 16 }}>
-            <div className="qy-markdown-preview" style={{ maxHeight: 260, overflow: 'auto' }}>
+            <div className="qy-markdown-preview" style={{ maxHeight: 240, overflow: 'auto' }}>
               <ReactMarkdown>{content}</ReactMarkdown>
             </div>
           </Card>
-          <Card
-            title={`切片预览（${chunks.length} 片）`}
-            size="small"
-            loading={preview.isPending}
-          >
+          <Card title={`切片预览（${chunks.length} 片）`} size="small" loading={preview.isPending}>
             {chunks.length === 0 ? (
               <Typography.Text type="secondary">还没有切片；输入内容后自动生成</Typography.Text>
             ) : (

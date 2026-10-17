@@ -13,7 +13,7 @@ from app.schemas.knowledge import (
     ChunkPreviewItem, ChunkPreviewRequest, DocumentPage, DocumentView, ImportJobView, PublishRequest,
     PublishResult, RetrievalRequest, RetrievalResult, ReviewCommentCreate, ReviewCommentView,
     ReviewDecideRequest, ReviewTaskView, RuleConflictView, RuleCreate, RuleImportResult, RuleUpdate,
-    RuleView, VersionBase,
+    RuleView, VersionBase, VersionCreateRequest,
 )
 from app.services import (
     knowledge_governance, knowledge_import, knowledge_retrieval, knowledge_review, knowledge_rule,
@@ -171,6 +171,16 @@ def resolve_conflict(conflict_id: int, request: Request, db: Session = Depends(g
 def list_versions(document_pk: int, db: Session = Depends(get_db),
                   user: AppUser = Depends(require("knowledge:document:read"))) -> list[dict]:
     return knowledge_governance.list_versions(db, document_pk)
+
+
+@router.post("/documents/{document_pk}/versions", response_model=VersionBase)
+def create_version(document_pk: int, payload: VersionCreateRequest, request: Request,
+                   db: Session = Depends(get_db),
+                   user: AppUser = Depends(require("knowledge:document:write"))) -> dict:
+    return knowledge_governance.create_version(
+        db, actor_of(request, user, db), document_pk,
+        content_md=payload.content_md, change_summary=payload.change_summary,
+    )
 
 
 @router.post("/versions/{version_id}/submit", response_model=VersionBase)

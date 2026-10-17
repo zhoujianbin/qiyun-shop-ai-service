@@ -6269,6 +6269,56 @@
             }
           }
         }
+      },
+      "post": {
+        "tags": [
+          "knowledge"
+        ],
+        "summary": "Create Version",
+        "operationId": "create_version_api_v1_knowledge_documents__document_pk__versions_post",
+        "parameters": [
+          {
+            "name": "document_pk",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Document Pk"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VersionCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VersionBase"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/v1/knowledge/versions/{version_id}/submit": {
@@ -17798,6 +17848,33 @@
           "checksum"
         ],
         "title": "VersionBase"
+      },
+      "VersionCreateRequest": {
+        "properties": {
+          "content_md": {
+            "type": "string",
+            "maxLength": 500000,
+            "minLength": 1,
+            "title": "Content Md"
+          },
+          "change_summary": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Change Summary"
+          }
+        },
+        "type": "object",
+        "required": [
+          "content_md"
+        ],
+        "title": "VersionCreateRequest"
       },
       "WarehouseCreate": {
         "properties": {

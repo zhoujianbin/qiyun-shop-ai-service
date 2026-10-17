@@ -104,6 +104,11 @@ class VersionBase(BaseModel):
     published_at: str | None = None
 
 
+class VersionCreateRequest(BaseModel):
+    content_md: str = Field(min_length=1, max_length=500_000)
+    change_summary: str | None = Field(default=None, max_length=2000)
+
+
 class PublishRequest(BaseModel):
     change_summary: str = Field(min_length=1, max_length=2000)
     effective_from: str | None = None

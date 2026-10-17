@@ -1,9 +1,11 @@
 """文档与版本治理：提交审核、发布门禁、回滚、定时生效。"""
 from __future__ import annotations
 
+import hashlib
 from datetime import datetime, timezone
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -81,6 +83,68 @@ def chunk_view(chunk: Chunk) -> dict:
         "line_start": meta.get("source_line_start"),
         "line_end": meta.get("source_line_end"),
     }
+
+
+def create_version(db: Session, actor: dict, document_pk: int, *, content_md: str,
+                   change_summary: str | None = None) -> dict:
+    """后台以文本新建草稿版本：版本号递增、内容重新切片、写审计。"""
+    document = db.get(Document, document_pk)
+    if document is None or document.tenant_id != settings.tenant_id:
+        raise NotFound("文档不存在")
+    content = (content_md or "").strip()
+    if not content:
+        raise ValidationError("内容不能为空")
+
+    latest = db.execute(
+        select(DocumentVersion.version)
+        .where(DocumentVersion.document_pk == document_pk)
+        .order_by(DocumentVersion.version.desc()).limit(1)
+    ).scalar()
+    next_version = int(latest or 0) + 1
+
+    version = DocumentVersion(
+        tenant_id=settings.tenant_id,
+        document_pk=document_pk,
+        version=next_version,
+        content_md=content,
+        checksum=hashlib.sha256(content.encode("utf-8")).hexdigest(),
+        status="DRAFT",
+        change_summary=(change_summary or "").strip() or None,
+        source_kind="MANUAL",
+        created_by=actor.get("id"),
+    )
+    db.add(version)
+    try:
+        db.flush()
+    except IntegrityError as exc:  # 并发保存撞唯一键
+        raise Conflict("VERSION_CONFLICT", "该文档的版本号已被占用，请刷新后重试") from exc
+
+    from app.services.knowledge_chunk import split_markdown
+
+    for chunk in split_markdown(content, first_line=1):
+        db.add(Chunk(
+            tenant_id=settings.tenant_id,
+            document_version_id=version.id,
+            ord=chunk.ord,
+            title_path=chunk.title_path or None,
+            content=chunk.content,
+            token_count=chunk.token_count,
+            embedding_status="PENDING",
+            identity_level=document.identity_level,
+            metadata_json={
+                "source_line_start": chunk.line_start,
+                "source_line_end": chunk.line_end,
+                "headings": chunk.title_path,
+                "doc_version": str(next_version),
+                "source": "editor",
+            },
+        ))
+
+    audit.record(db, actor, "knowledge.version.create", "knowledge.document_version", version.id,
+                 after={"document_id": document.document_id, "version": next_version,
+                        "source_kind": "MANUAL"})
+    db.flush()
+    return version_view(version)
 
 
 def submit(db: Session, actor: dict, version_id: int) -> dict:
