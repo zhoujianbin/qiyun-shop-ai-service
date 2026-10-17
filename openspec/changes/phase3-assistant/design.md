@@ -111,7 +111,7 @@ event: error     data: {"code":"...","message":"...","details":null,"request_id"
 | 检索为空 | **不调模型**；先**反问澄清一次**；仍空 → 固定拒答 + 建议转人工 |
 | 有命中但相关度一般 | 正常回答，前缀「以下为一般口径，具体以你的订单为准」 |
 | 属实时事实类且未核验 | 只答口径，**不给数值** |
-| 命中 escalation 规则 | 规则来源：读 `knowledge.rule` 中 `source_kind='escalation'` 的 `triggers` 词表，对问题做关键词命中；命中即取该规则 `forbid` 作为安全提示，**禁止给操作指令**（规则不参与向量检索，只能这样拿） |
+| 命中 escalation 规则 | 规则来源：读 `knowledge.rule` 中 `source_kind='escalation'` 的 `triggers` 词表，**并配一张中文别名表**（triggers 是英文标识符，用户提问是中文，不配别名永远命中不了）做关键词匹配；命中即取该规则 `forbid` 作为安全提示，**禁止给操作指令** |
 | 模型超时/失败 | 返回错误事件 + `request_id`，消息状态 FAILED |
 
 ### 决策 7：身份核验与固定事实快照

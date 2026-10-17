@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, request_permissions
 from app.api.v1.common import actor_of
+from app.core.config import settings
 from app.core.db import get_db
 from app.core.errors import AppError, Conflict
 from app.integrations import llm
@@ -27,16 +28,14 @@ from app.schemas.assistant import (
     ConversationCreate, ConversationPage, ConversationView, MessagePage, StreamRequest,
 )
 from app.services import assistant_conversation as conversation_service
+from app.services import assistant_graph
 from app.services import audit
 from app.services.common import now
 
 router = APIRouter(prefix="/ai", tags=["assistant"])
 
 HEARTBEAT_SECONDS = 15.0
-SYSTEM_PROMPT = (
-    "你是栖云智家的客服助手。只根据给出的知识作答，不编造参数、时限与金额；"
-    "不确定时明确说明并建议转人工。回答简洁，控制在 300 字以内。"
-)
+
 
 
 def _sse(event: str, data: dict) -> str:
@@ -134,12 +133,13 @@ def stream_message(conversation_id: int, payload: StreamRequest, request: Reques
         db, conversation_id, actor=actor, staff=_staff(request, db, user))
     if conversation.status == "CLOSED":
         raise Conflict("CONVERSATION_CLOSED", "会话已关闭")
+    if conversation.ai_paused:
+        raise Conflict("AI_PAUSED", "客服已接管，请等待人工回复")
 
     content = payload.content.strip()
     conversation_service.check_length(content)
     conversation_service.check_rate_limit(db, user.id)
 
-    # 幂等：同一 client_msg_id 重发，不重复生成
     existing = conversation_service.find_by_client_id(db, conversation_id, payload.client_msg_id)
     if existing is not None:
         return StreamingResponse(
@@ -159,17 +159,21 @@ def stream_message(conversation_id: int, payload: StreamRequest, request: Reques
 
     history = conversation_service.context_messages(db, conversation_id)
     started = time.monotonic()
+    state = assistant_graph.run(db, content, actor=actor, history=history[:-1],
+                                identity_level=payload.identity_level)
 
     def responder() -> Iterator[str]:
-        messages = [{"role": "system", "content": SYSTEM_PROMPT}]
-        messages.extend(history[:-1])
-        messages.append({"role": "user", "content": content})
-        # 三期组 3 会把这里替换成 plan-and-execute 图（含检索与引用）
-        yield from llm.stream_chat(messages)
+        if state.decision != "ANSWER":
+            text = assistant_graph.fixed_answer(state)
+            for index in range(0, len(text), 8):
+                yield text[index:index + 8]
+            return
+        yield from llm.stream_chat(state.prompt_messages)
 
     def events() -> Iterator[str]:
-        yield _sse("meta", {"conversation_id": conversation_id,
-                            "message_id": answer.id, "seq": answer.seq})
+        yield _sse("meta", {"conversation_id": conversation_id, "message_id": answer.id,
+                            "seq": answer.seq, "decision": state.decision,
+                            "intent": state.intent})
         collected: list[str] = []
         try:
             for kind, text in _iter_with_heartbeat(responder()):
@@ -178,17 +182,19 @@ def stream_message(conversation_id: int, payload: StreamRequest, request: Reques
                     continue
                 collected.append(text)
                 yield _sse("delta", {"text": text})
-        except Exception as exc:  # noqa: BLE001 - 统一转成 error 事件
-            _finish(db, answer, "FAILED", "".join(collected), latency_ms=_elapsed(started))
-            detail = str(exc)[:300]
-            yield _sse("error", {"code": "ASSISTANT_GENERATION_FAILED", "message": detail,
-                                 "details": None, "request_id": getattr(request.state, "request_id", None)})
+        except Exception as exc:  # noqa: BLE001
+            _finish(db, answer, "FAILED", "".join(collected), latency_ms=_elapsed(started), state=state)
+            yield _sse("error", {"code": "ASSISTANT_GENERATION_FAILED", "message": str(exc)[:300],
+                                 "details": None,
+                                 "request_id": getattr(request.state, "request_id", None)})
             return
         text = "".join(collected)
-        latency = _elapsed(started)
-        _finish(db, answer, "DONE" if text else "REFUSED", text, latency_ms=latency)
-        yield _sse("citations", {"hits": []})
-        yield _sse("done", {"status": "DONE" if text else "REFUSED", "latency_ms": latency})
+        status = "REFUSED" if state.decision in ("CLARIFY", "REFUSE") else ("DONE" if text else "FAILED")
+        _finish(db, answer, status, text, latency_ms=_elapsed(started), state=state)
+        yield _sse("citations", {"hits": state.citations})
+        yield _sse("done", {"status": status, "latency_ms": _elapsed(started),
+                            "intent": state.intent, "decision": state.decision,
+                            "degraded": state.degraded})
 
     return StreamingResponse(events(), media_type="text/event-stream", headers=_stream_headers())
 
@@ -197,14 +203,51 @@ def _elapsed(started: float) -> int:
     return int((time.monotonic() - started) * 1000)
 
 
-def _finish(db: Session, message: Message, status: str, content: str, *, latency_ms: int) -> None:
+def _finish(db: Session, message: Message, status: str, content: str, *, latency_ms: int,
+            state: "assistant_graph.State | None" = None) -> None:
+    from app.models.generated import Citation, RetrievalTrace
+
     message.status = status
     message.content = content
     message.latency_ms = latency_ms
     message.model = getattr(llm.get_provider(), "name", None)
+    if state is not None:
+        meta = dict(message.metadata_json or {})
+        meta["plan"] = state.plan
+        meta["intent"] = state.intent
+        meta["degraded"] = state.degraded
+        message.metadata_json = meta
+        for citation in state.citations:
+            db.add(Citation(
+                tenant_id=message.tenant_id,
+                message_id=message.id,
+                chunk_id=citation.get("chunk_id"),
+                document_id=citation["document_id"],
+                version=citation["version"],
+                title_path=citation.get("title_path"),
+                line_start=citation.get("line_start"),
+                line_end=citation.get("line_end"),
+                snippet=citation.get("snippet"),
+                rank=citation["rank"],
+                entity_tags=citation.get("entity_tags") or [],
+            ))
+        for observation in state.observations:
+            db.add(RetrievalTrace(
+                tenant_id=message.tenant_id,
+                message_id=message.id,
+                query=observation.get("query") or state.question,
+                filters={"identity_level": None},
+                intent=state.intent,
+                hit_count=len(observation.get("hits") or []),
+                hits=observation.get("hits") or [],
+                latency_ms=observation.get("latency_ms"),
+                model=getattr(llm.get_provider(), "name", None),
+                tokens=None,
+            ))
     db.add(message)
     audit.record(db, None, "ai.message.answer", "assistant.message", message.id,
-                 after={"status": status, "chars": len(content)})
+                 after={"status": status, "chars": len(content),
+                        "intent": getattr(state, "intent", None)})
     db.commit()
 
 
@@ -214,3 +257,49 @@ def _stream_headers() -> dict:
         "X-Accel-Buffering": "no",
         "Connection": "keep-alive",
     }
+
+@router.get("/messages/{message_id}/trace")
+def get_message_trace(message_id: int, request: Request, db: Session = Depends(get_db),
+                      user: AppUser = Depends(get_current_user)) -> list[dict]:
+    from sqlalchemy import select
+
+    from app.core.errors import Forbidden
+    from app.models.generated import Citation, Message, RetrievalTrace
+
+    message = db.get(Message, message_id)
+    if message is None or message.tenant_id != settings.tenant_id:
+        raise ConversationNotFound()
+    conversation = conversation_service.ensure_visible(
+        db, message.conversation_id, actor=actor_of(request, user, db), staff=_staff(request, db, user))
+    perms = request_permissions(request, db, user)
+    if "ai:trace:read" not in perms and conversation.user_id != user.id:
+        raise Forbidden("缺少权限：ai:trace:read")
+    traces = db.execute(
+        select(RetrievalTrace).where(RetrievalTrace.message_id == message_id)
+        .order_by(RetrievalTrace.id)
+    ).scalars().all()
+    citations = db.execute(
+        select(Citation).where(Citation.message_id == message_id).order_by(Citation.rank)
+    ).scalars().all()
+    return [{
+        "message_id": message_id,
+        "status": message.status,
+        "intent": message.metadata_json.get("intent") if message.metadata_json else None,
+        "plan": message.metadata_json.get("plan") if message.metadata_json else None,
+        "latency_ms": message.latency_ms,
+        "traces": [{
+            "query": row.query, "intent": row.intent, "hit_count": row.hit_count,
+            "latency_ms": row.latency_ms, "model": row.model,
+        } for row in traces],
+        "citations": [{
+            "document_id": row.document_id, "version": row.version, "title_path": row.title_path,
+            "line_start": row.line_start, "line_end": row.line_end,
+            "entity_tags": row.entity_tags,
+        } for row in citations],
+    }]
+
+
+def ConversationNotFound():
+    from app.core.errors import NotFound
+
+    return NotFound("消息不存在或不可见")

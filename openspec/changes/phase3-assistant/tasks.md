@@ -25,16 +25,16 @@
 
 ## 3. RAG 编排与护栏
 
-- [ ] 3.1 实现 `assistant_graph.py`（plan → execute ⇄ replan → finalize，一条件边）：计划 ≤2 步、最大 4 步、最多 1 次 replan、总超时 30s；计划用 Pydantic 校验，非法退化为固定两步；`ToolSpec` 带 `read_only/requires_identity/scope`；验证：单测直接调用节点，超限场景各一条
-- [ ] 3.2 实现意图识别节点（知识问答/实时事实/身份核验请求/人工请求），**规则词表优先、未命中才调 LLM planner**；验证：四类样例各命中预期分支，且规则命中时 LLM 调用次数为 0
-- [ ] 3.3 检索节点调用二期 `knowledge_retrieval.search`，不重复实现检索；验证：单测 monkeypatch 搜索返回，断言命中被带入状态
-- [ ] 3.4 实现"无命中不调模型"：首次无命中返回**澄清反问**，同一问题再空则固定拒答；验证：单测断言两种情形 fake LLM 均未被调用
-- [ ] 3.5 实现生成节点（流式）与服务端引用装配（只从 `hits` 生成）；验证：回答的 citations 每项都能回指真实切片
-- [ ] 3.6 实现实时事实边界：订单/物流/库存类问题不给具体值，只给口径与引导；验证：问物流位置时回答不含轨迹
-- [ ] 3.7 实现高风险护栏：读 `knowledge.rule` 中 `source_kind='escalation'` 的 `triggers` 词表做关键词匹配，命中即取该规则 `forbid` 追加安全提示；验证：远程开锁问题不含操作步骤，且 trace 记录命中的 rule_id
-- [ ] 3.8 实现问答链路留痕 `retrieval_trace` 与按消息反查接口；验证：一次问答后能按 message_id 查到记录
-- [ ] 3.9 实现模型超时/异常降级（错误事件 + 消息 FAILED）；验证：注入超时后消息状态为失败
-- [ ] 3.10 为 RAG 链路写测试（图节点、引用、拒答、护栏、留痕、降级）；验证：`python -m pytest -q tests/test_assistant_answer.py`
+- [x] 3.1 实现 `assistant_graph.py`（plan → execute ⇄ replan → finalize，一条件边）：计划 ≤2 步、最大 4 步、最多 1 次 replan、总超时 30s；计划用 Pydantic 校验，非法退化为固定两步；`ToolSpec` 带 `read_only/requires_identity/scope`；验证：单测直接调用节点，超限场景各一条
+- [x] 3.2 实现意图识别节点（知识问答/实时事实/身份核验请求/人工请求），**规则词表优先、未命中才调 LLM planner**；验证：四类样例各命中预期分支，且规则命中时 LLM 调用次数为 0
+- [x] 3.3 检索节点调用二期 `knowledge_retrieval.search`，不重复实现检索；验证：单测 monkeypatch 搜索返回，断言命中被带入状态
+- [x] 3.4 实现"无命中不调模型"：首次无命中返回**澄清反问**，同一问题再空则固定拒答；验证：单测断言两种情形 fake LLM 均未被调用
+- [x] 3.5 实现生成节点（流式）与服务端引用装配（只从 `hits` 生成）；验证：回答的 citations 每项都能回指真实切片
+- [x] 3.6 实现实时事实边界：订单/物流/库存类问题不给具体值，只给口径与引导；验证：问物流位置时回答不含轨迹
+- [x] 3.7 实现高风险护栏：读 `knowledge.rule` 中 `source_kind='escalation'` 的 `triggers` 词表做关键词匹配，命中即取该规则 `forbid` 追加安全提示；验证：远程开锁问题不含操作步骤，且 trace 记录命中的 rule_id
+- [x] 3.8 实现问答链路留痕 `retrieval_trace` 与按消息反查接口；验证：一次问答后能按 message_id 查到记录
+- [x] 3.9 实现模型超时/异常降级（错误事件 + 消息 FAILED）；验证：注入超时后消息状态为失败
+- [x] 3.10 为 RAG 链路写测试（图节点、引用、拒答、护栏、留痕、降级）；验证：`python -m pytest -q tests/test_assistant_answer.py`
 
 ## 4. 身份核验与转人工
 
