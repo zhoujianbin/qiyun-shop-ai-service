@@ -441,3 +441,75 @@ question
 | Q6 | 工具清单 9 个 | **已定 A** |
 | Q7 | F21 处置 | **已定 A**（服务端推导，字段不动） |
 | Q8 | 两段式模型调用（非流式决策 + 流式回答） | 本轮新提 |
+---
+
+## 14 工具调用协议澄清（第 6 轮，回答提问）
+
+### 14.1 提问原文
+
+> "我想的是按照一个约定返回 json 结构的工具调用参数和工具名，然后直接就能调用工具了 —— 对不对？"
+> "工具调用返回 json 的过程要识别出来，不能对外展示，是这样吗？"
+
+### 14.2 判定：**第一句对，第二句完全对**
+
+| 说法 | 判定 | 补正 |
+|---|---|---|
+| 工具调用是"约定好的 JSON 结构"（工具名 + 参数） | **对** | 但它**不是** `content` 里的自由文本，而是独立字段 `message.tool_calls`，配套 `finish_reason="tool_calls"`。所以**不需要正则去 content 里抠 JSON** |
+| 拿到就能直接调工具 | **对一半** | 还差 4 步：`arguments` 是 **JSON 字符串**不是对象（要 `json.loads`）；要过 JSON Schema + 业务校验；结果要以 `role:"tool"` + `tool_call_id` **回填成新消息再请求一次**；模型可能返回多个 tool_calls |
+| 解析过程不能对外展示 | **完全对** | 与三期"只转发 `content`、丢弃 `reasoning_content`"是**同一条规则** |
+
+### 14.3 真实往返（4 步）
+
+```
+POST /chat/completions  messages=[..., user:"我的订单到哪了"]
+  |
+  v
+resp.choices[0].message = { role:"assistant", content: null,
+                            tool_calls:[{id:"call_1", type:"function",
+                              function:{name:"query_shipment",
+                                        arguments:"{\"order_no\":\"SO2026...\"}"}}] }
+  |  arguments 是【字符串】，且是【模型生成的、不可信】
+  v
+服务端：json.loads → JSON Schema 校验 → 业务校验(actor/核验) → 调 fulfillment.list_shipments
+  |
+  v
+POST /chat/completions  messages=[...,
+      {role:"assistant", content:null, tool_calls:[...]},        <-- 原样回填
+      {role:"tool", tool_call_id:"call_1", content:"{...}"}]    <-- 结果回填
+  |
+  v
+最终回答（content）
+```
+
+### 14.4 "流式"到底卡在哪
+
+| 模式 | 工具调用长什么样 | 复杂度 |
+|---|---|---|
+| `stream:false` | 一次性完整 JSON，`message.tool_calls` 直接可用 | 低 |
+| `stream:true` | SSE 分块，`delta.tool_calls[i].function.arguments` 是**逐 token 片段**，要自己累积 buffer 拼完整；`id`/`name` 只在首块出现，`finish_reason` 到了才知道结束 | 高（buffer 拼接 + 多分支） |
+
+**决定性事实（F25）**：三期 `llm.py` 的 `stream()` 只 `yield delta.content`（`llm.py:105-107`），**`delta.tool_calls` 被静默丢弃**。
+→ 今天若直接开 `tools` 走流式，模型返回 tool_call 时会表现为**空回答**（一个字都没有），且不报错。这是必须改 `llm.py` 的硬理由，不是偏好。
+
+全库 `grep finish_reason|tool_calls`（除 `.venv`）**零命中** —— 这两个字段当前完全没被读取。
+
+### 14.5 "不能对外展示"的三条理由（都对）
+
+| # | 理由 |
+|---|---|
+| 1 | **体验**：用户不该看到 `{"name":"query_order","arguments":"{\"order_no\":..."}` |
+| 2 | **安全**：参数里含订单号、手机后四位等敏感值；暴露工具名与参数结构等于泄露能力清单，便于被诱导调用 |
+| 3 | **一致性**：三期已确立"只有 `content` 才下发"的边界，tool_calls 属决策过程，遵循同一规则 |
+
+但要区分：**不展示原始 JSON ≠ 不展示任何痕迹**。只出 `tool` 事件的"正在查询订单…"是好事（透明、掩盖等待）。
+
+### 14.6 比"不展示"更要紧的：args 是**不可信输入**
+
+模型不是攻击者，但用户输入可诱导模型生成恶意参数（"帮我查订单 SO2026-别人的号"）。
+所以工具层必须：① JSON Schema `additionalProperties:false` 严格校验；② `resolve_order(db, actor, order_no)` 带 `customer_id` 过滤；③ **actor 永远来自 `conversation.user_id`，绝不能来自 args**。
+
+### 14.7 新发现的硬约束（F26）
+
+`assistant.message.role` 的 CHECK 只允许 `('USER','ASSISTANT','AGENT','SYSTEM')`（`0007…sql`）。
+→ **`role:"tool"` 的消息无法落 message 表**（加值 = ALTER 三期 CHECK）。
+→ 工具结果只能：进 `assistant.tool_call` + 作为**事实块注入第二轮 prompt**，不落消息表。这反过来印证了 §10.5 的"服务端事实块"设计。
