@@ -125,3 +125,65 @@
 | 日期 | 内容 |
 |---|---|
 | 本轮 | 建立事实基线 F1–F17、可复用/缺口清单、范围三分类初稿、3 个待决模糊点。未写任何代码、未动任何已有 change。 |
+---
+
+## 6 决策台账（第 2 轮起）
+
+| ID | 决策 | 理由 |
+|---|---|---|
+| D1 | **[已定]** 写工具边界 = **Q1-B**：只做 2 个"无金额低压"写工具（取消未发货订单、提交售后申请）；资金类（退款/开票执行）一律不做 | 有可演示闭环（读→确认→写→审计→可撤销），同时把资金风险挡在门外 |
+| D2 | **[暂定]** 本体两用（Q2-C），但分两档：检索侧只做"实体归一 → 复用二期已有 filter"；工具侧做型号/订单参数归一。共用 entity/alias 表 | 两档共用同一张实体表，边际成本低；真正翻倍的是 chunk 映射，故给映射表单独立项 |
+| D3 | **[暂定，含事实修正]** 评测门禁 = **`make test` 内的 pytest 用例 + `make eval`**，不做 GitHub Actions（**仓库无 `.github/`**，无 CI 基础设施）；夜间真模型改为"手工可选任务" | 不凭空造 CI；pytest 已是项目唯一门禁（`docs/三期/02_验收清单.md` A1） |
+| D4 | **[建议]** 本体表示 = **关系表 + 递归 CTE，深度上限 2**；新建 `ontology` schema 5 表 | 见 §6.2 遍历深度实测 |
+| D5 | **[建议]** `handoff.reason` 冲突出路 = **①**：沿用 `MODEL_ERROR`，四期新表 `assistant.tool_call` 记失败明细，`summary` 写 `TOOL_FAILED:<tool>:<code>`。**不 ALTER 三期 CHECK** | 规约优先；明细进新表，审计可反查，理由可读 |
+
+### 6.1 第 2 轮新增事实（实测）
+
+| # | 事实 | 出处 | 影响 |
+|---|---|---|---|
+| F18 | 二期检索 `filters` **只认两个键**：`category`、`product_scope`（都打在 `knowledge.document` 上） | `app/services/knowledge_retrieval.py:61-66` | **好消息**：实体若归一成"产品型号"，直接映射到 `product_scope` 就能用现有检索，**四期零改二期代码** |
+| F19 | 仓库**无 `.github/`**，唯一门禁是 `make test` / `make contract` | `Makefile` | "CI 门禁"必须落到 pytest，不是 Actions |
+| F20 | 本体素材条数（实测）：产品 5 + 配件 4、部件 6、故障现象 22、政策/保修/升级规则 24、意图 14、意图自带工具名 12 个、`required_entities` 7 个 | `product_catalog.yaml`、`product_warranty.yaml`、`escalation_matrix.yaml`、`intent_taxonomy.yaml` | "够用"的目标规模可以量化，不用拍脑袋 |
+
+### 6.2 本体范围（建议值，实测推导）
+
+**实体 67 条**
+
+| 实体类型 | 条数 | 来源 |
+|---|---|---|
+| 产品 | 5 | `product_catalog.yaml:products` |
+| 配件 | 4 | `product_catalog.yaml:accessories` |
+| 部件 | 6 | `product_warranty.yaml` 的 distinct `component` |
+| 故障/现象 | 22 | `escalation_matrix.yaml` distinct `triggers`（+ `escalation_aliases.yaml` 中文别名） |
+| 动作 | 6 | 工具清单的写/查动作（取消订单、提交售后、申请发票、查订单、查物流、查商品） |
+| 政策/规则 | 24 | policy 9 + warranty 7 + escalation 8（**已在 `knowledge.rule`，本体只存引用，不复制正文**） |
+
+**关系 ~105–125 条、7 类**
+
+| 关系 | 方向 | 条数 | 来源 | 维护方式 |
+|---|---|---|---|---|
+| `PART_OF` | 配件/部件 → 产品 | ~11 | catalog + warranty | 脚本导入 |
+| `SYMPTOM_OF` | 故障 → 部件 | 22 | **无数据源** | **纯人工**（唯一新增成本） |
+| `REMEDY` | 故障 → 动作 | ~15 | `06_保修维修与备件/` 6 篇 | 人工+审核 |
+| `COVERED_BY` | 部件 → 保修规则 | 7 | warranty | 脚本导入 |
+| `GOVERNED_BY` | 动作 → 政策 | ~10 | policy_rules | 脚本导入 |
+| `ALIAS_OF` | 别名 → 实体 | 40–60 | `escalation_aliases.yaml` 20 组 + 型号口语 | 人工+审核 |
+| `ESCALATES_TO` | 故障 → 升级矩阵 | ~10 | escalation_matrix | 脚本导入 |
+
+**明确不入本体**：订单/支付/履约/退款状态机（7+6+5+9 状态、36 条迁移，真源 `order_workflow.yaml`）。它是流程不是知识，入本体等于重造状态机 —— 这是"本体范围失控"的头号入口。
+
+**遍历深度（关键结论）**：一跳不够。"指纹失灵 →(SYMPTOM_OF) 锁体电子部分 →(COVERED_BY) 保修 24 个月" 是**两跳**才拿到答案。故：检索扩展用**深度 1**（省 token、防跑题），回答取证用**深度 2**（递归 CTE + `depth` 列 + 路径数组防环）。
+
+### 6.3 chunk ↔ 实体映射（待定，见 §7 Q4）
+
+核心坑：**chunk_id 会失效**。文档发新版本 → 新 `document_version_id` → 新 chunk 行（`UNIQUE(document_version_id, ord)`），旧映射指向死 chunk。
+故映射表的逻辑键应为 `(document_id, version, chunk_ord)`，`chunk_id` 只作冗余加速列；版本切换时按逻辑键重挂，不重跑实体抽取。
+
+---
+
+## 7 下一轮待决
+
+| # | 问题 | 选项 |
+|---|---|---|
+| Q4 | chunk↔entity 映射怎么落 | A 新表 `ontology.chunk_entity`（逻辑键 = document_id+version+chunk_ord）/ B 零表，检索前现算实体匹配 / C 写进 `chunk.metadata`（需改二期导入代码并全量重导） |
+| Q5 | 67 实体 / 105 关系是否算"够用" | 是 / 缩到 3 产品线 / 扩到含状态机与角色 |
