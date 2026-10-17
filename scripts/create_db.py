@@ -71,7 +71,9 @@ def main() -> None:
             cur.execute(sql)
     with psycopg.connect(dsn(target)) as conn:
         with conn.cursor() as cur:
-            cur.execute("select count(*) from pg_tables where schemaname in ('shared','commerce','knowledge')")
+            cur.execute(
+                "select count(*) from pg_tables where schemaname in ('shared','commerce','knowledge','assistant')"
+            )
             print(f"schema 应用完成，表数量：{cur.fetchone()[0]}")
 
 

@@ -5,13 +5,13 @@
 
 ## 1. 数据与地基
 
-- [ ] 1.1 在 `db/schema.sql` 增 `CREATE SCHEMA assistant` 与 **6 张表**（conversation / message / **citation** / handoff / identity_verification / retrieval_trace），含唯一键、部分唯一索引与 CHECK；验证：空库建表后表数 55 → **61**
-- [ ] 1.2 写 `db/migrations/0007_assistant_schema.sql`（幂等）；验证：对一期+二期库执行 `apply_migrations.py` 后表数 **61**，再执行一次全部 skipped
-- [ ] 1.3 重跑 `scripts/gen_models.py`；验证：`AssistantConversation` 等 **6 个**模型存在，`git diff --exit-code` 在无手改时为空
-- [ ] 1.4 追加 `ai:chat:read`、`ai:chat:write`、`ai:handoff:read`、`ai:handoff:write`、`ai:trace:read` 五个权限码与 `AI_AGENT`/`AI_SUPERVISOR` 授权（含迁移）；验证：`select count(*) from shared.app_permission where module='ai'` 返回 5
-- [ ] 1.5 在 `app/core/config.py` 增 `llm_provider`、`llm_base_url`、`llm_model`、`llm_api_key`、`llm_timeout_seconds`、`assistant_context_rounds`、`assistant_message_max_chars`、`assistant_rate_limit`；验证：`APP_ENV=test` 时 provider 解析为 fake
-- [ ] 1.6 实现 `app/integrations/llm.py`：`stream_chat()` 支持 OpenAI 兼容流与 fake；**只转发 `delta.content`，丢弃 `reasoning_content`**；验证：fake 返回确定性文本，单测不联网；接真模型时断言流里不出现推理内容
-- [ ] 1.7 为 schema 与权限写测试；验证：`python -m pytest -q tests/test_assistant_schema.py`
+- [x] 1.1 在 `db/schema.sql` 增 `CREATE SCHEMA assistant` 与 **6 张表**（conversation / message / **citation** / handoff / identity_verification / retrieval_trace），含唯一键、部分唯一索引与 CHECK；验证：空库建表后表数 55 → **61**
+- [x] 1.2 写 `db/migrations/0007_assistant_schema.sql`（幂等）；验证：对一期+二期库执行 `apply_migrations.py` 后表数 **61**，再执行一次全部 skipped
+- [x] 1.3 重跑 `scripts/gen_models.py`；验证：`AssistantConversation` 等 **6 个**模型存在，`git diff --exit-code` 在无手改时为空
+- [x] 1.4 追加 `ai:chat:read`、`ai:chat:write`、`ai:handoff:read`、`ai:handoff:write`、`ai:trace:read` 五个权限码与 `AI_AGENT`/`AI_SUPERVISOR` 授权（含迁移）；验证：`select count(*) from shared.app_permission where module='ai'` 返回 5
+- [x] 1.5 在 `app/core/config.py` 增 `llm_provider`、`llm_base_url`、`llm_model`、`llm_api_key`、`llm_timeout_seconds`、`assistant_context_rounds`、`assistant_message_max_chars`、`assistant_rate_limit`；验证：`APP_ENV=test` 时 provider 解析为 fake
+- [x] 1.6 实现 `app/integrations/llm.py`：`stream_chat()` 支持 OpenAI 兼容流与 fake；**只转发 `delta.content`，丢弃 `reasoning_content`**；验证：fake 返回确定性文本，单测不联网；接真模型时断言流里不出现推理内容
+- [x] 1.7 为 schema 与权限写测试；验证：`python -m pytest -q tests/test_assistant_schema.py`
 
 ## 2. 会话与流式
 

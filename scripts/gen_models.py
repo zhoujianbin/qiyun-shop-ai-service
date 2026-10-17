@@ -112,7 +112,7 @@ def main() -> None:
     blocks = []
     for m in re.finditer(r"CREATE TABLE\s+(\w+)\.(\w+)\s*\(", ddl):
         schema, table = m.group(1), m.group(2)
-        if schema not in ("shared", "commerce", "knowledge"):
+        if schema not in ("shared", "commerce", "knowledge", "assistant"):
             continue
         start = m.end()
         depth, end = 1, start

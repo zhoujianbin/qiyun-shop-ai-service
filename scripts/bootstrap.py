@@ -44,6 +44,11 @@ PERMISSIONS = [
     ("knowledge:review:write", "审核决定与批注", "knowledge"),
     ("knowledge:retrieval:test", "执行检索测试", "knowledge"),
     ("knowledge:governance:read", "查看治理报告", "knowledge"),
+    ("ai:chat:read", "查看客服会话与消息", "ai"),
+    ("ai:chat:write", "以客服身份回话与结束会话", "ai"),
+    ("ai:handoff:read", "查看转人工队列", "ai"),
+    ("ai:handoff:write", "接单与关闭转人工", "ai"),
+    ("ai:trace:read", "查看问答链路留痕", "ai"),
 ]
 
 ROLES = [
@@ -60,9 +65,10 @@ ROLES = [
       "shop:invoice:read", "shop:invoice:write", "shop:customer:read", "shop:fulfillment:read", "shop:report:read"]),
     ("FINANCE_VIEWER", "财务只读", "支付、退款、发票、报表只读",
      ["shop:order:read", "shop:payment:read", "shop:refund:read", "shop:invoice:read", "shop:report:read"]),
-    ("CS_SUPERVISOR", "客服主管", "订单与售后只读、售后审核、知识只读与检索测试",
+    ("CS_SUPERVISOR", "客服主管", "订单与售后只读、售后审核、知识只读与检索测试、转人工只读",
      ["shop:order:read", "shop:aftersales:read", "shop:aftersales:review", "shop:customer:read", "shop:report:read",
-      "shop:fulfillment:read", "knowledge:document:read", "knowledge:retrieval:test", "knowledge:governance:read"]),
+      "shop:fulfillment:read", "knowledge:document:read", "knowledge:retrieval:test", "knowledge:governance:read",
+      "ai:handoff:read"]),
     ("AUDITOR", "只读审计", "全部模块只读（不含知识库正文）", "READ_ONLY"),
     ("KNOWLEDGE_ADMIN", "知识管理员", "全部 knowledge:* 权限",
      ["knowledge:document:read", "knowledge:document:write", "knowledge:document:import",
@@ -76,6 +82,11 @@ ROLES = [
      ["knowledge:document:read", "knowledge:document:write", "knowledge:document:import"]),
     ("CS_AGENT", "普通客服", "只读知识文档，供三期问答使用",
      ["knowledge:document:read"]),
+    ("AI_AGENT", "智能客服坐席", "会话读写、转人工接单",
+     ["ai:chat:read", "ai:chat:write", "ai:handoff:read", "ai:handoff:write"]),
+    ("AI_SUPERVISOR", "智能客服主管", "坐席全部权限 + 问答留痕",
+     ["ai:chat:read", "ai:chat:write", "ai:handoff:read", "ai:handoff:write", "ai:trace:read",
+      "knowledge:document:read"]),
 ]
 
 CHANNELS = [

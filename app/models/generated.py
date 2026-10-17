@@ -947,3 +947,108 @@ class SchemaMigration(Base):
     duration_ms = mapped_column(Integer)
     success = mapped_column(Boolean, server_default=text("true"))
 
+
+class Conversation(Base):
+    __tablename__ = "conversation"
+    __table_args__ = {"schema": "assistant"}
+    id = mapped_column(BigInteger, primary_key=True)
+    tenant_id = mapped_column(BigInteger)
+    conversation_no = mapped_column(String(32))
+    user_id = mapped_column(BigInteger)
+    party = mapped_column(Text)
+    channel_account_id = mapped_column(BigInteger)
+    title = mapped_column(String(120))
+    status = mapped_column(Text, server_default=text("'OPEN'"))
+    ai_paused = mapped_column(Boolean, server_default=text("false"))
+    message_count = mapped_column(Integer, server_default=text("0"))
+    last_message_at = mapped_column(DateTime(timezone=True))
+    created_at = mapped_column(DateTime(timezone=True), server_default=text("now()"))
+    updated_at = mapped_column(DateTime(timezone=True), server_default=text("now()"))
+
+
+class Message(Base):
+    __tablename__ = "message"
+    __table_args__ = {"schema": "assistant"}
+    id = mapped_column(BigInteger, primary_key=True)
+    tenant_id = mapped_column(BigInteger)
+    conversation_id = mapped_column(BigInteger)
+    seq = mapped_column(Integer)
+    role = mapped_column(Text)
+    content = mapped_column(Text, server_default=text("''"))
+    status = mapped_column(Text, server_default=text("'DONE'"))
+    client_msg_id = mapped_column(String(64))
+    model = mapped_column(String(64))
+    prompt_tokens = mapped_column(Integer)
+    completion_tokens = mapped_column(Integer)
+    latency_ms = mapped_column(Integer)
+    metadata_json = mapped_column("metadata", JSONB, server_default=text("'{}'::jsonb"))
+    created_at = mapped_column(DateTime(timezone=True), server_default=text("now()"))
+    updated_at = mapped_column(DateTime(timezone=True), server_default=text("now()"))
+
+
+class Citation(Base):
+    __tablename__ = "citation"
+    __table_args__ = {"schema": "assistant"}
+    id = mapped_column(BigInteger, primary_key=True)
+    tenant_id = mapped_column(BigInteger)
+    message_id = mapped_column(BigInteger)
+    chunk_id = mapped_column(BigInteger)
+    document_id = mapped_column(String(48))
+    version = mapped_column(Integer)
+    title_path = mapped_column(String(512))
+    line_start = mapped_column(Integer)
+    line_end = mapped_column(Integer)
+    snippet = mapped_column(Text)
+    rank = mapped_column(Integer)
+    entity_tags = mapped_column(JSONB, server_default=text("'[]'::jsonb"))
+    created_at = mapped_column(DateTime(timezone=True), server_default=text("now()"))
+
+
+class Handoff(Base):
+    __tablename__ = "handoff"
+    __table_args__ = {"schema": "assistant"}
+    id = mapped_column(BigInteger, primary_key=True)
+    tenant_id = mapped_column(BigInteger)
+    conversation_id = mapped_column(BigInteger)
+    reason = mapped_column(Text)
+    status = mapped_column(Text, server_default=text("'OPEN'"))
+    assignee_id = mapped_column(BigInteger)
+    claimed_at = mapped_column(DateTime(timezone=True))
+    closed_at = mapped_column(DateTime(timezone=True))
+    summary = mapped_column(Text)
+    created_at = mapped_column(DateTime(timezone=True), server_default=text("now()"))
+    updated_at = mapped_column(DateTime(timezone=True), server_default=text("now()"))
+
+
+class IdentityVerification(Base):
+    __tablename__ = "identity_verification"
+    __table_args__ = {"schema": "assistant"}
+    id = mapped_column(BigInteger, primary_key=True)
+    tenant_id = mapped_column(BigInteger)
+    conversation_id = mapped_column(BigInteger)
+    order_no = mapped_column(String(32))
+    phone_tail = mapped_column(String(4))
+    order_id = mapped_column(BigInteger)
+    customer_id = mapped_column(BigInteger)
+    status = mapped_column(Text)
+    attempts = mapped_column(Integer, server_default=text("0"))
+    expires_at = mapped_column(DateTime(timezone=True))
+    created_at = mapped_column(DateTime(timezone=True), server_default=text("now()"))
+
+
+class RetrievalTrace(Base):
+    __tablename__ = "retrieval_trace"
+    __table_args__ = {"schema": "assistant"}
+    id = mapped_column(BigInteger, primary_key=True)
+    tenant_id = mapped_column(BigInteger)
+    message_id = mapped_column(BigInteger)
+    query = mapped_column(Text)
+    filters = mapped_column(JSONB, server_default=text("'{}'::jsonb"))
+    intent = mapped_column(String(32))
+    hit_count = mapped_column(Integer, server_default=text("0"))
+    hits = mapped_column(JSONB, server_default=text("'[]'::jsonb"))
+    latency_ms = mapped_column(Integer)
+    model = mapped_column(String(64))
+    tokens = mapped_column(Integer)
+    created_at = mapped_column(DateTime(timezone=True), server_default=text("now()"))
+

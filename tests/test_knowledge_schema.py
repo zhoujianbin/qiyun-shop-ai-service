@@ -30,9 +30,11 @@ def test_base_table_count_is_55():
     with SessionLocal() as db:
         total = db.execute(text(
             "select count(*) from information_schema.tables"
-            " where table_schema in ('shared','commerce','knowledge') and table_type = 'BASE TABLE'"
+            " where table_schema in ('shared','commerce','knowledge','assistant')"
+            " and table_type = 'BASE TABLE'"
         )).scalar_one()
-    assert total == 55
+    # 二期收口 55；三期 assistant schema 6 张表后为 61
+    assert total == 61
 
 
 def test_new_tables_exist():

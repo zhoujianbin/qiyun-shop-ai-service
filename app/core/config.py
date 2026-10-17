@@ -33,6 +33,19 @@ class Settings(BaseSettings):
     # 二期：知识库审核
     knowledge_allow_self_review: bool = True   # 单人开发默认开；企业上线可视规模关闭
 
+    # 三期：智能客服 / 大模型（OpenAI 兼容端点；APP_ENV=test 时自动 fake）
+    llm_provider: str = "auto"                 # auto | openai | fake
+    llm_base_url: str = "https://api.deepseek.com"
+    llm_model: str = "deepseek-flash"
+    llm_api_key: str = ""
+    llm_timeout_seconds: int = 60
+    llm_max_tokens: int = 800
+    llm_temperature: float = 0.2
+    assistant_context_rounds: int = 6
+    assistant_message_max_chars: int = 2000
+    assistant_rate_limit_per_minute: int = 20
+    assistant_retention_days: int = 90
+
     @property
     def cors_origin_list(self) -> list[str]:
         return [x.strip() for x in self.cors_origins.split(",") if x.strip()]
