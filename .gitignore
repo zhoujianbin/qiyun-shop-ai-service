@@ -9,12 +9,12 @@ web/node_modules/
 web/dist/
 *.egg-info/
 
-# 二期：不随仓库分发的材料
-# - docs/二期/ 含三/四期规划，属泄露红线
+# 不随仓库分发的本地材料
 # - docs/handover/ 含交接用 .env（数据库口令）
+# - docs/ppt/ 为本地讲义大纲
 # - .dsh/ 为本地会话目录
-docs/二期/
 docs/handover/
+docs/ppt/
 .dsh/
 
 # 构建/测试产物
