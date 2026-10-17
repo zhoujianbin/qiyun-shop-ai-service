@@ -120,6 +120,14 @@ const MENU: MenuEntry[] = [
       { key: ROUTES.knowledgeGovernance, label: '治理看板', permission: P.knowledgeGovernanceRead },
     ],
   },
+  {
+    key: 'assistant-group',
+    label: '智能客服',
+    icon: <CustomerServiceOutlined />,
+    children: [
+      { key: ROUTES.adminAssistant, label: '客服工作台', permission: P.aiChatRead },
+    ],
+  },
 ];
 
 export function AdminShell() {

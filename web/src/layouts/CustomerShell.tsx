@@ -23,6 +23,7 @@ const NAV_ITEMS = [
   { key: ROUTES.orders, label: '我的订单' },
   { key: ROUTES.afterSalesList, label: '售后服务' },
   { key: ROUTES.invoices, label: '发票' },
+  { key: ROUTES.assistant, label: '智能客服' },
 ];
 
 export function CustomerShell() {

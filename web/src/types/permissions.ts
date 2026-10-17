@@ -18,6 +18,7 @@ export const PERMISSIONS = [
   'knowledge:rule:read', 'knowledge:rule:write',
   'knowledge:review:read', 'knowledge:review:write',
   'knowledge:retrieval:test', 'knowledge:governance:read',
+  'ai:chat:read', 'ai:chat:write', 'ai:handoff:read', 'ai:handoff:write', 'ai:trace:read',
 ] as const;
 export type PermissionCode = (typeof PERMISSIONS)[number];
 
@@ -56,6 +57,11 @@ export const P = {
   knowledgeReviewWrite: 'knowledge:review:write',
   knowledgeRetrievalTest: 'knowledge:retrieval:test',
   knowledgeGovernanceRead: 'knowledge:governance:read',
+  aiChatRead: 'ai:chat:read',
+  aiChatWrite: 'ai:chat:write',
+  aiHandoffRead: 'ai:handoff:read',
+  aiHandoffWrite: 'ai:handoff:write',
+  aiTraceRead: 'ai:trace:read',
 } as const satisfies Record<string, PermissionCode>;
 
 export const ROLE_CODES = [

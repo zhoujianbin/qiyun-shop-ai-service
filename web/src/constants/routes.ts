@@ -51,4 +51,8 @@ export const ROUTES = {
   knowledgeReview: '/admin/knowledge/review',
   knowledgeRetrieval: '/admin/knowledge/retrieval-test',
   knowledgeGovernance: '/admin/knowledge/governance',
+
+  // 三期：智能客服
+  assistant: '/assistant',
+  adminAssistant: '/admin/assistant',
 } as const;

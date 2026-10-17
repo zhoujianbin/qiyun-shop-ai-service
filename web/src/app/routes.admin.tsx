@@ -43,4 +43,6 @@ export const adminRoutes: RouteObject[] = [
   { path: 'knowledge/review', element: protect([P.knowledgeReviewRead], () => import('@/pages/knowledge/ReviewPage')) },
   { path: 'knowledge/retrieval-test', element: protect([P.knowledgeRetrievalTest], () => import('@/pages/knowledge/RetrievalTestPage')) },
   { path: 'knowledge/governance', element: protect([P.knowledgeGovernanceRead], () => import('@/pages/knowledge/GovernancePage')) },
+  // 三期：智能客服
+  { path: 'assistant', element: protect([P.aiChatRead], () => import('@/pages/admin/AssistantConsolePage')) },
 ];

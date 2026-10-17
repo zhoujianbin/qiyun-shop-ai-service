@@ -21,6 +21,8 @@ export const customerRoutes: RouteObject[] = [
       { path: 'invoices', element: lazyEl(() => import('@/pages/customer/InvoicePage')) },
       { path: 'account', element: lazyEl(() => import('@/pages/customer/AccountPage')) },
       { path: 'account/addresses', element: lazyEl(() => import('@/pages/customer/AddressBookPage')) },
+      // 三期：智能客服（登录后可用；游客走 guest-session 后同样落这里）
+      { path: 'assistant', element: lazyEl(() => import('@/pages/assistant/ChatPage')) },
     ],
   },
 ];
