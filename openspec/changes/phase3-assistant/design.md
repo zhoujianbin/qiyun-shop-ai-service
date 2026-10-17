@@ -139,6 +139,7 @@ event: error     data: {"code":"...","message":"...","details":null,"request_id"
 | SSE 泄漏幂等记录 | SSE 路径加入 `EXEMPT_PREFIXES`（这是硬要求，不是优化） |
 | 推理内容外泄 | 集成层只转发 `content`，单测断言流里无 reasoning |
 | 会话数据增长快 | `retrieval_trace`/`citation` 按 message 级联删除；保留期由 `assistant_cleanup.py` 控制 |
+| `updated_at` 被触发器维护，不能当"最后活动时间" | 清理判据改用 `coalesce(last_message_at, created_at)`；僵尸消息判据仍用 `message.updated_at`（停滞即不再更新） |
 | 核验被暴力尝试 | 连续 3 次失败转人工 + `attempts` 记录；失败话术不可枚举 |
 | `langgraph` 在 Py3.13 装不上 | 第一步验证；失败退回手写循环（specs/任务不变） |
 | 首 token 因 planner 变慢 | 意图规则优先，只有未命中才调 LLM planner |

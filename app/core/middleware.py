@@ -23,7 +23,10 @@ EXEMPT_PREFIXES = ("/api/v1/auth", "/api/v1/attachments", "/api/v1/webhooks", "/
 EXEMPT_PREFIXES = (*EXEMPT_PREFIXES, "/api/v1/knowledge/preview-chunks",
                     "/api/v1/knowledge/import/jobs", "/api/v1/knowledge/rules/import",
                     # 检索测试只写检索日志，不需要幂等回放（否则日志不会随调用增长）
-                    "/api/v1/knowledge/retrieval")
+                    "/api/v1/knowledge/retrieval",
+                    # 三期：SSE 流式路径。中间件在 event-stream 上提前 return，不会写 COMPLETED，
+                    # 会给每个流留下永久 IN_PROGRESS 幂等记录；幂等改由 client_msg_id 在业务层保证。
+                    "/api/v1/ai/conversations")
 
 
 class RequestContextMiddleware(BaseHTTPMiddleware):

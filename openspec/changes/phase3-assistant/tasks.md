@@ -15,13 +15,13 @@
 
 ## 2. 会话与流式
 
-- [ ] 2.1 实现 `assistant_conversation.py`：建会话、追加消息（seq 单调）、关闭会话、上下文窗口取数；验证：关闭后追加返回 409
-- [ ] 2.2 实现会话可见性（本人 / 有 `ai:chat:read` 的员工 / 被指派人），越权 404；验证：客户 A 访问客户 B 会话返回 404
-- [ ] 2.3 实现 SSE 端点 `POST /api/v1/ai/conversations/{id}/messages:stream`：meta → ping(15s) → delta → citations → done/error，响应头含 `Cache-Control: no-cache` 与 `X-Accel-Buffering: no`；**先落 USER + 占位 ASSISTANT(STREAMING)，流结束更新终态**；验证：httpx 读流断言事件顺序与响应头
-- [ ] 2.4 把 SSE 路径加入中间件幂等豁免；验证：不携带 `Idempotency-Key` 也能建立流
-- [ ] 2.5 实现限流与长度上限（429 / 422）；验证：超限用例有明确错误码
-- [ ] 2.6 写清理任务 `scripts/assistant_cleanup.py`：按保留期删已关闭会话（6 张表级联），并把超 2 分钟仍 `STREAMING` 的消息置 `FAILED`；验证：造过期会话与僵尸消息各一，执行后 6 张表无残留、消息变 FAILED
-- [ ] 2.7 为会话与流式写测试；验证：`python -m pytest -q tests/test_assistant_conversation.py`
+- [x] 2.1 实现 `assistant_conversation.py`：建会话、追加消息（seq 单调）、关闭会话、上下文窗口取数；验证：关闭后追加返回 409
+- [x] 2.2 实现会话可见性（本人 / 有 `ai:chat:read` 的员工 / 被指派人），越权 404；验证：客户 A 访问客户 B 会话返回 404
+- [x] 2.3 实现 SSE 端点 `POST /api/v1/ai/conversations/{id}/messages:stream`：meta → ping(15s) → delta → citations → done/error，响应头含 `Cache-Control: no-cache` 与 `X-Accel-Buffering: no`；**先落 USER + 占位 ASSISTANT(STREAMING)，流结束更新终态**；验证：httpx 读流断言事件顺序与响应头
+- [x] 2.4 把 SSE 路径加入中间件幂等豁免；验证：不携带 `Idempotency-Key` 也能建立流
+- [x] 2.5 实现限流与长度上限（429 / 422）；验证：超限用例有明确错误码
+- [x] 2.6 写清理任务 `scripts/assistant_cleanup.py`：按保留期删已关闭会话（6 张表级联），并把超 2 分钟仍 `STREAMING` 的消息置 `FAILED`；验证：造过期会话与僵尸消息各一，执行后 6 张表无残留、消息变 FAILED
+- [x] 2.7 为会话与流式写测试；验证：`python -m pytest -q tests/test_assistant_conversation.py`
 
 ## 3. RAG 编排与护栏
 

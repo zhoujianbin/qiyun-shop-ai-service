@@ -4,6 +4,7 @@ from app.api.v1 import (
     aftersales, attachment, auth, cart, catalog, channel, customer, fulfillment, inventory, invoice, order,
     payment, refund, report, staff, webhooks,
 )
+from app.api.v1 import assistant
 from app.api.v1 import knowledge
 
 api_router = APIRouter()
@@ -25,3 +26,4 @@ api_router.include_router(invoice.router)
 api_router.include_router(report.router)
 api_router.include_router(webhooks.router)
 api_router.include_router(knowledge.router)
+api_router.include_router(assistant.router)
