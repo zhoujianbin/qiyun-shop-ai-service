@@ -16,6 +16,7 @@ import LikeOutlined from '@ant-design/icons/LikeOutlined';
 import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { assistantApi, streamChat } from '@/api/endpoints/assistant';
+import { newUuid } from '@/api/uuid';
 import { queryClient } from '@/app/providers';
 import { EmptyState } from '@/components/common/EmptyState';
 import { PageHeader } from '@/components/common/PageHeader';
@@ -136,7 +137,9 @@ export default function ChatPage() {
         message.success('已发送给人工客服，请等待回复');
         return;
       }
-      await streamChat(conversationId, { content, client_msg_id: crypto.randomUUID() }, (event) => {
+      // 不能用 crypto.randomUUID()：局域网 http 访问时该 API 不存在（非安全上下文），
+      // 会抛 "crypto.randomUUID is not a function" 导致整条发送链路失败。
+      await streamChat(conversationId, { content, client_msg_id: newUuid() }, (event) => {
         if (event.name === 'meta') {
           answerIdRef.current = Number(event.data.message_id ?? 0) || null;
         } else if (event.name === 'delta') {
