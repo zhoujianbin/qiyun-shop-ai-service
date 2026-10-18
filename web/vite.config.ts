@@ -89,7 +89,9 @@ export default defineConfig({
   },
   server: {
     port: 5173,
-    host: '127.0.0.1',
+    // 监听所有网卡，允许同一局域网内的其他机器访问 http://<本机 IP>:5173 。
+    // 只想本机访问时用 `vite --host 127.0.0.1` 覆盖。
+    host: true,
     proxy: {
       '/api': {
         target: 'http://127.0.0.1:8000',
@@ -101,7 +103,7 @@ export default defineConfig({
   // 预览构建产物时同样把 /api 代理到本地 FastAPI，便于对 dist 做工端到端冒烟。
   preview: {
     port: 4173,
-    host: '127.0.0.1',
+    host: true,
     proxy: {
       '/api': {
         target: 'http://127.0.0.1:8000',
